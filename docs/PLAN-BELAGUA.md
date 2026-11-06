@@ -1,7 +1,7 @@
 # Piloto: Refugio de Belagua — Plan de desarrollo
 
-> Documento de trabajo para el colaborador/a. Complementa a `PLAN.md`, que sigue siendo la referencia técnica (arquitectura, stack, normas de trabajo). **Donde este documento y `PLAN.md` difieran, manda este.**
-> Fecha: 2026-10-28. Colaboración **voluntaria y no retribuida**, con fin de aprendizaje, de unos **3 meses a ~20 h/semana orientativas** (≈ 250 h). No hay horario obligatorio: el calendario es una guía, no una obligación. El calendario (sección 6) usa 12 semanas más 1 de margen y aplica los recortes de la sección 6.0.
+> Documento de trabajo para el colaborador/a. Complementa a `PLAN.md`, que sigue siendo la referencia técnica (arquitectura, tecnología y normas de trabajo). **Donde este documento y `PLAN.md` difieran, manda este.**
+> Revisado: 2026-11-06, tras el prototipo y la elección de Supabase. Colaboración **voluntaria y no retribuida**, con fin de aprendizaje, de unos **3 meses a ~20 h/semana orientativas** (≈ 250 h). No hay horario obligatorio: el calendario es una guía, no una obligación. El calendario (sección 6) usa 12 semanas más 1 de margen y aplica los recortes de la sección 6.0.
 
 ---
 
@@ -64,30 +64,36 @@ Lista de partida para el inventario. **Ninguna periodicidad ni obligación se da
 
 ## 4. Usuarios del piloto
 
-| Rol | Quién (a confirmar) | Uso |
+| Perfil | Quién (a confirmar) | Uso |
 |---|---|---|
-| **Administrador** | Persona de la FNDME responsable de instalaciones/refugios | Panel, alertas, documentos |
-| **Guarda** | Guarda/s del refugio | Formulario móvil: incidencias, partes sencillos, comprobaciones periódicas (p. ej. revisión visual de extintores). **Nuevo rol** respecto a `PLAN.md` |
-| **Técnico de empresa mantenedora** | Empresas de calefacción, contraincendios, electricidad… | Formulario móvil, solo sus instalaciones |
-| **Técnico redactor** | Arquitecto técnico (si hay que redactar informe/libro) | Solo lectura |
-| **Tutor del proyecto** | Nosotros | Revisión de PR, decisiones, contacto con FNDME |
+| **Administración** | Persona de la FNDME responsable de instalaciones o refugios | Inicio, archivo, subida, papelera y configuración |
+| **Consulta** | Personas de la FNDME o técnico redactor | Ve todo, sin cambiar nada |
+| **Guarda** | Guarda/s del refugio | Registra comprobaciones e incidencias, y consulta el archivo |
+| **Empresa mantenedora** | Calefacción, contraincendios, electricidad… | Registra partes y certificados de sus instalaciones |
+| **Tutor del proyecto** | Txin | Revisión de PR, decisiones y contacto con la FNDME. Sin usuario en producción salvo que la FNDME lo autorice |
 
 El colaborador/a **no** trata directamente con las empresas mantenedoras sin el visto bueno del tutor y de la FNDME.
 
 ---
 
-## 5. Antes de que empiece el colaborador/a (tareas del tutor)
+## 5. Antes de empezar (tareas del tutor)
 
-No se arranca la semana 1 sin esto:
+**Para empezar con datos ficticios:**
 
-- [ ] **Acuerdo de colaboración voluntaria** firmado (código abierto Apache 2.0, confidencialidad y datos personales). No es una beca ni prácticas: sin horario impuesto y con libertad para dejarlo.
-- [ ] Acuerdo con la FNDME: alcance del piloto, persona de contacto, permiso para visitar el refugio.
-- [ ] **Contrato de encargo de tratamiento (RGPD)** con la FNDME: habrá datos personales de guardas y técnicos.
-- [x] Organizaciones de GitHub creadas: `abauntz-sw` (app) y `nafarmendi` (FNDME, archivo del refugio). Ver sección 6.0.
-- [ ] Acceso del colaborador/a a los dos repos. Cuenta de Cloudflare.
-- [ ] Pedir a la FNDME **toda la documentación disponible del refugio** (proyecto de reforma, final de obra, licencia de actividad/apertura, inscripción en el registro de turismo si la hay, boletines, contratos de mantenimiento, actas de inspección, pólizas, concesión). En el formato que la tengan: da igual papel, PDF o email.
-- [ ] Fecha para la visita al refugio (semana 2), teniendo en cuenta nieve y temporada.
-- [ ] Reunión semanal acordada con el colaborador/a (30 min) y demo cada 3–4 semanas con la FNDME.
+- [ ] **Acuerdo de colaboración voluntaria** firmado.
+- [x] Organizaciones de GitHub creadas: `abauntz-sw` y `nafarmendi`.
+- [ ] Reunión semanal acordada con el colaborador/a (30 min).
+
+**Antes de cargar cualquier dato real:**
+
+- [ ] Acuerdo con la FNDME: alcance, persona de contacto y permiso para visitar el refugio.
+- [ ] **Encargo de tratamiento (RGPD)** actualizado: Supabase como subencargado, registro de actividad en la base de datos y devolución de los datos al terminar.
+- [ ] Proyecto Supabase **Pro** de producción en una región concreta de la UE, con copias diarias. Decidir quién lo paga y a nombre de quién está.
+- [ ] Revisar las condiciones de protección de datos de Supabase.
+- [ ] Repositorio privado `nafarmendi/libro-refugio-belagua` con la GitHub App instalada.
+- [ ] Pedir a la FNDME **toda la documentación disponible del refugio**, en el formato en que la tengan.
+- [ ] Fecha para la visita al refugio, teniendo en cuenta nieve y temporada.
+- [ ] Confirmar el ordenador de la oficina y quién será responsable de la carga.
 
 ---
 
@@ -97,25 +103,31 @@ Las tareas con número (0.x, 1.x…) son las de `PLAN.md`, sección 6; aquí se 
 
 ### 6.0 Simplificaciones por la dedicación disponible
 
-Con ~250 h no cabe toda la arquitectura de `PLAN.md`, pensada para varios edificios. Para un solo edificio se puede simplificar sin perder nada que la FNDME vaya a notar:
-
 | Tarea de `PLAN.md` | En el piloto | Por qué se puede |
 |---|---|---|
-| 1.5 Indexador GitHub → D1 | **Aplazada.** El panel lee directamente del repo del refugio (API de GitHub) | Un solo edificio: pocos archivos, no hace falta índice |
-| 1.8 Enlace mágico por email | **Código de acceso** por guarda y por empresa, con caducidad | Ya figura como alternativa en `PLAN.md`; mucho menos trabajo |
-| 1.10 Alertas con Cron de Workers | **GitHub Action programada** en el repo del refugio que envía el email | No necesita D1; reutiliza el script de validación |
-| 2.3 Exportación del registro | **Solo CSV**, y solo si hay tiempo | El PDF puede hacerse desde la hoja de cálculo |
+| 1.2 Subir desde la web | Sencilla y recortable | La carga inicial va por la herramienta local |
+| 1.3 Informe de huecos | Pantalla mínima sobre la vista `huecos` | La consulta ya existe |
+| 1.5 Exportación diaria | Solo CSV, sin formato elaborado | Basta para leer el archivo sin la aplicación |
+| 1.10 Alertas | Un único resumen diario por correo | Los avisos ya están en Inicio |
+| 2.3 Exportación del registro | Solo CSV, y solo si hay tiempo | El PDF puede hacerse desde la hoja de cálculo |
 
-Lo que **no** se simplifica: validación de datos (schemas + CI), modo offline y control de permisos.
+Lo que **no** se simplifica: permisos y sus comprobaciones, modo offline y sencillez de uso.
 
-**Repositorios del piloto.** En lugar de la estructura de `PLAN.md` (sección 5.2), para un solo edificio bastan dos repos:
+**Entornos del piloto:**
 
-| Repo | Qué contiene | Visibilidad |
+| Entorno | Datos | Plan | Quién entra |
+|---|---|---|---|
+| Local o proyecto `libro-dev` | Solo ficticios | Free | Colaborador/a y tutor |
+| Proyecto de producción | Reales | Pro | Según el encargo de tratamiento |
+
+**Repositorios del piloto:**
+
+| Repositorio | Qué contiene | Visibilidad |
 |---|---|---|
-| [`abauntz-sw/libro-edificio`](https://github.com/abauntz-sw/libro-edificio) | La app, y como carpetas `plantillas/` (tarea 0.3) y `edificio-ejemplo/` (tarea 0.4, datos ficticios). Los issues de todo el piloto, organizados por milestones (bloques A–D) | Público (Apache 2.0) |
-| [`nafarmendi/libro-refugio-belagua`](https://github.com/nafarmendi/libro-refugio-belagua) | El archivo real del refugio. Propiedad de la organización de la FNDME | **Privado** |
+| [`abauntz-sw/libro-edificio`](https://github.com/abauntz-sw/libro-edificio) | La aplicación, la base de datos, los datos ficticios y los issues del piloto | Público (Apache 2.0) |
+| [`nafarmendi/libro-refugio-belagua`](https://github.com/nafarmendi/libro-refugio-belagua) | Los archivos reales del refugio, propiedad de la FNDME | **Privado** |
 
-La app no debe llevar escrito el nombre del repo del refugio: va en configuración (p. ej. `EDIFICIO_REPO`), para que cambiar de organización o añadir edificios no obligue a tocar el código.
+El nombre del repositorio del refugio se guarda en la tabla `edificios`, no en el código.
 
 ### 6.1 Decisión abierta: formulario móvil en PWA o en Flutter
 
@@ -133,7 +145,7 @@ Se ha propuesto hacer el formulario del técnico en **Flutter** (app nativa) en 
 | Acceso de técnicos externos | Enlace o QR, sin instalar nada | Instalar una app para un solo refugio; difícil que lo acepten |
 | Distribución | Ninguna | Tiendas: Apple 99 €/año y revisión de cada versión; Google 25 € una vez. APK a mano no sirve en iPhone |
 | Tecnologías del proyecto | Una (JS/TS): panel y formulario | Dos (React para el panel + Dart) |
-| Validación con el mismo schema en móvil y servidor | Casi inmediata (JSON Schema en JS) | Duplicarla o usar librerías Dart menos maduras |
+| Conexión con Supabase | Cliente JavaScript, igual que el panel | Cliente Dart aparte |
 | Tiempo (~250 h) | Encaja con el plan | Configuración, tiendas y firma iOS restan horas al producto |
 | Tests offline | Playwright, ya previsto en 1.7 | Otro sistema de tests |
 
@@ -149,35 +161,35 @@ Se ha propuesto hacer el formulario del técnico en **Flutter** (app nativa) en 
 - Si la app pasa a ser para usuarios fijos (guarda, personal propio de una gestoría) más que para técnicos que van y vienen.
 - Si el colaborador/a ya domina Flutter: el coste de aprendizaje desaparece, aunque se mantienen los de distribución y la doble tecnología.
 
-**Dato que decide:** en la visita, anotar qué móviles (Android/iPhone) usan el guarda y los técnicos habituales, y cuánto tiempo pueden estar sin cobertura. Decidir antes de empezar la semana 4 y dejarlo escrito en `docs/decisiones.md`.
+**Dato que decide:** en la visita, anotar qué móviles (Android/iPhone) usan el guarda y los técnicos habituales, y cuánto tiempo pueden estar sin cobertura. Decidir antes de empezar la semana 7 y dejarlo escrito en `docs/decisiones/`.
 
-### Bloque A — Entender y modelar (semanas 1–3)
+### Bloque A — Base de datos y carga (semanas 1–3)
 
 | Semana | Trabajo | Entregable |
 |---|---|---|
-| 1 | Leer `PLAN.md` y este documento. Montar entorno. Tarea **0.1**. Primera lectura de la documentación recibida de la FNDME: hacer un listado (nombre, tipo, fecha, a qué instalación se refiere) en una hoja de cálculo | Repo de la app preparado; listado de documentos |
-| 2 | **Visita al refugio** con el tutor y el guarda: recorrer instalaciones, fotografiar placas de características, comprobar cobertura móvil en sala de calderas, sótano y exteriores; anotar qué móviles usan guarda y técnicos (ver 6.1). Tarea **0.2** (schemas), añadiendo el rol `guarda` y los campos que pida el refugio (p. ej. temporada de apertura) | Notas de visita en `docs/visita-belagua.md`; schemas en PR |
-| 3 | Tareas **0.3** (plantillas, empezando por las instalaciones de la sección 3), **0.4** (`edificio-ejemplo` ficticio) y **0.5** (validación + CI). Cargar el inventario real en el repo privado **`nafarmendi/libro-refugio-belagua`** | CI en verde; inventario real validando |
+| 1 | Leer los planes, probar el prototipo y montar el entorno. Tareas **0.1** y **0.2**: seguir un caso completo en `libro-dev` | Repositorio preparado y base revisada |
+| 2 | **0.7** carga local con el ejemplo ficticio. **Visita al refugio** si ya hay fecha: instalaciones, placas, cobertura y móviles | `escanear` e `importar` funcionando; notas de la visita |
+| 3 | **0.5** CI y **0.3** datos comunes, con las instalaciones de la sección 3. **0.6** repositorio del edificio | CI en verde; plantilla del repositorio |
 
-**Hito A (fin semana 3):** inventario del refugio en YAML, revisado por el tutor y enseñado a la FNDME. Lista de preguntas pendientes para ellos.
+**Hito A (fin semana 3):** la carga funciona de punta a punta con datos ficticios y hay un inventario del refugio revisado por el tutor, preparado para pasar a producción.
 
 ### Bloque B — Documentación (semanas 4–6)
 
 | Semana | Trabajo | Entregable |
 |---|---|---|
-| 4 | **1.1** (esqueleto React + Worker + despliegue) y **1.4** (GitHub App que hace commits) | URL pública; commit de prueba en el repo del refugio |
-| 5 | **1.2** importación de documentos. Cargar la documentación real de Belagua | Documentos del refugio en `documentos/` con su YAML |
-| 6 | **1.3** informe de huecos (leyendo directamente del repo) | Informe de huecos del refugio |
+| 4 | **1.1** esqueleto y publicación. **1.8** acceso por correo. **1.4** función de archivos | URL pública; se sube y descarga un documento ficticio |
+| 5 | **1.9** Archivo y Papelera. **Carga real** desde el ordenador de la oficina, si están cerrados los requisitos de la sección 5 | Documentos del refugio consultables en la aplicación |
+| 6 | **1.3** informe de huecos. **1.2** subida web si hay tiempo. **1.5** exportación y copia | Informe de huecos del refugio |
 
-**Hito B (fin semana 6):** la FNDME recibe el **informe de huecos**: qué documentos, contratos o revisiones faltan o están caducados. Es el primer resultado útil para ellos aunque la app no esté terminada.
+**Hito B (fin semana 6):** la FNDME recibe el **informe de huecos**: qué documentos faltan o están caducados. Es el primer resultado útil, aunque la aplicación no esté terminada.
 
 ### Bloque C — Partes de trabajo en el refugio (semanas 7–9)
 
 | Semana | Trabajo | Entregable |
 |---|---|---|
-| 7 | **1.6** formulario de parte. Versión simplificada para el guarda (incidencia / comprobación rápida) | Formulario usable en el móvil |
-| 8 | **1.7** modo offline. Probarlo **en el propio refugio**, en los puntos sin cobertura detectados en la visita | Test e2e offline + prueba real documentada |
-| 9 | **1.8** acceso por código (guarda y 1–2 empresas mantenedoras) y **2.2** QR por instalación (pegar los QR en el refugio) | Guarda y al menos una empresa dados de alta |
+| 7 | **1.6** formulario de parte, con su versión para el guarda | Formulario usable en el móvil |
+| 8 | **1.7** modo offline. Probarlo **en el propio refugio**, en los puntos sin cobertura | Test e2e y prueba real documentada |
+| 9 | **1.8** acceso con código para guarda y empresas. **2.2** QR por instalación | Guarda y al menos una empresa dados de alta |
 
 **Hito C (fin semana 9):** el guarda registra partes de verdad.
 
@@ -185,12 +197,12 @@ Se ha propuesto hacer el formulario del técnico en **Flutter** (app nativa) en 
 
 | Semana | Trabajo | Entregable |
 |---|---|---|
-| 10 | **1.9** panel básico (ficha, inventario, documentos, partes por instalación) | Panel navegable |
-| 11 | **1.10** alertas por email a la FNDME (GitHub Action). Corrección de errores reportados por guarda y FNDME | Alertas reales de caducidad |
-| 12 | Documentación de uso (guía de una página para guarda y empresas), traspaso, demo final y nota de lo aprendido | Demo final con la FNDME |
-| 13 | **Margen** para retrasos (documentación tardía, visita aplazada, bajas). Si no se necesita: **2.3** exportación CSV | — |
+| 10 | **1.9** Inicio y Configuración, con instalaciones, revisiones, empresas y usuarios | Panel completo |
+| 11 | **1.10** alertas por correo a la FNDME. Corrección de errores reportados | Alertas reales |
+| 12 | Guía de una página, traspaso, demo final y nota de lo aprendido | Demo final con la FNDME |
+| 13 | **Margen** para retrasos. Si no se necesita: **2.3** exportación CSV | — |
 
-Si sobra tiempo: **2.3**, **2.1** calendario preventivo y **2.5** incidencias. Si falta: el panel se queda en lo mínimo (lista de documentos y partes); **nunca** se recortan el modo offline ni la validación de datos.
+Si sobra tiempo: **2.3**, **2.1** y **2.5**. Si falta: se aplaza **1.2** y Configuración se limita a lo imprescindible. **Nunca** se recortan los permisos ni el modo offline.
 
 ---
 
@@ -199,11 +211,13 @@ Si sobra tiempo: **2.3**, **2.1** calendario preventivo y **2.5** incidencias. S
 | Riesgo | Qué hacer |
 |---|---|
 | La documentación de la FNDME llega tarde o incompleta | El informe de huecos convierte ese problema en un entregable. Empezar el bloque B con lo que haya |
+| Los requisitos legales o el plan Pro se retrasan | Seguir con datos ficticios. Ningún dato real entra en `libro-dev` |
 | Visita imposible por nieve o temporada | Adelantarla todo lo posible; plan B: videollamada con el guarda recorriendo el edificio |
 | Sin cobertura en buena parte del edificio | Justo lo que el offline debe resolver; medirlo en la visita |
 | Guarda o empresas no adoptan el formulario | Formulario mínimo, QR en cada instalación, guía de una página, pedir opinión en la semana 9 |
-| Obligaciones normativas mal identificadas | Todo `verificado: false` hasta revisión técnica; la app no da consejo normativo |
-| Datos reales en sitios indebidos | Solo en `nafarmendi/libro-refugio-belagua` (privado). El repo de la app y los tests, solo con datos ficticios |
+| Obligaciones normativas mal identificadas | Todo con `verificado = false` hasta la revisión técnica; la aplicación no da consejo normativo |
+| Un error de permisos expone datos | Comprobación automática de cada perfil en el CI, antes de cualquier dato real |
+| Datos reales en sitios indebidos | Solo en producción y en el repositorio privado. El repositorio público, los tests y `libro-dev`, solo con datos ficticios |
 | El colaborador/a se atasca | Regla de `PLAN.md`: más de medio día atascado → comentarlo en el issue |
 
 ---
@@ -225,7 +239,7 @@ Si sobra tiempo: **2.3**, **2.1** calendario preventivo y **2.5** incidencias. S
 5. ¿Cómo es el suministro de agua, el saneamiento, la calefacción y la electricidad?
 6. ¿Quién es el guarda, todo el año o por temporadas, y qué tareas de mantenimiento hace él mismo?
 7. ¿Quién en la FNDME recibirá las alertas y usará el panel?
-8. ¿Gestiona la FNDME otros refugios? (Si la respuesta es sí, la fase 3 de `PLAN.md` —cartera de edificios— cobra sentido con ellos.)
+8. ¿Gestiona la FNDME otros refugios? (Si la respuesta es sí, la fase 3 de `PLAN.md`, cartera de edificios, cobra sentido con ellos.)
 
 ---
 

@@ -4,6 +4,8 @@ Esta guía te lleva desde cero hasta tu primer Pull Request y te indica por dón
 
 El detalle de cada tarea está en su [issue](https://github.com/abauntz-sw/libro-edificio/issues). Esta guía te dice en qué orden abordarlas y cómo trabajar.
 
+**¿Qué hago ahora?** Abre el issue con la etiqueta [`siguiente`](https://github.com/abauntz-sw/libro-edificio/issues?q=is%3Aopen+label%3Asiguiente). Siempre hay solo uno.
+
 Si algo no funciona o no se entiende, pregunta. El tutor del proyecto es Txin.
 
 ## Antes de empezar: cómo está montado
@@ -73,21 +75,24 @@ git clone https://github.com/abauntz-sw/libro-edificio.git
 cd libro-edificio
 ```
 
-## Paso 4. Lee los planes (issue #1)
+## Paso 4. Sesión de arranque (issue #1)
 
-1. Abre el [issue #1](https://github.com/abauntz-sw/libro-edificio/issues/1) y asígnatelo con **Assignees → assign yourself**.
-2. Lee entero [`PLAN-BELAGUA.md`](PLAN-BELAGUA.md).
-3. Lee [`PLAN.md`](PLAN.md). Lo más importante son las secciones 1, 3, 4, 5 y 7. Donde los dos planes difieran, manda `PLAN-BELAGUA.md`.
-4. Mientras lees, apunta lo que no entiendas o no te convenza.
-5. Escribe esas dudas en un comentario del issue.
+No hace falta que leas los planes enteros ni que lo entiendas todo antes de empezar. Los repasamos juntos.
 
-Lo veremos juntos y cerrarás el issue cuando estén resueltas las dudas.
+1. Prueba el [prototipo](https://claude.ai/artifact/LwqrqTDTS3DDUBRMBEQQBT) con los tres perfiles: administración, guarda y empresa.
+2. Echa un vistazo a [`PLAN-BELAGUA.md`](PLAN-BELAGUA.md), sobre todo a las secciones 1 a 4. Si te apetece más, sigue con [`PLAN.md`](PLAN.md), secciones 1, 3, 4, 5 y 7. Donde los dos planes difieran, manda `PLAN-BELAGUA.md`.
+3. Apunta lo que te llame la atención, aunque sea un «esto no lo entiendo».
+4. Quedamos una hora por videollamada. Repasamos el prototipo y los planes, resolvemos tus dudas y hacemos juntos el paso 5 compartiendo pantalla.
+
+Cierras el issue #1 después de la sesión.
 
 ## Paso 5. Haz tu primer Pull Request (issue #2)
 
 Este paso sirve para practicar el ciclo completo. La tarea es sencilla a propósito.
 
-**5.1. Asígnate el [issue #2](https://github.com/abauntz-sw/libro-edificio/issues/2)** y lee qué pide. El `LICENSE` ya está añadido, así que no tienes que crearlo.
+La primera vez lo hacemos juntos en la sesión de arranque.
+
+**5.1. Asígnate el [issue #2](https://github.com/abauntz-sw/libro-edificio/issues/2)** con **Assignees → assign yourself** y lee qué pide. El `LICENSE` ya está añadido, así que no tienes que crearlo.
 
 **5.2. Crea una rama** a partir de `main` actualizado:
 
@@ -152,6 +157,7 @@ git branch -d feat/0.1-preparar-repo
 4. Antes de abrir el Pull Request, comprueba la definición de hecho: código, tests, CI en verde y README actualizado si cambia cómo se usa.
 5. Abre el Pull Request con `Closes #N` y capturas si aplica.
 6. Atiende la revisión y fusiona cuando esté aprobado.
+7. Txin pasa la etiqueta `siguiente` al próximo issue.
 
 ### Trabaja con un agente de IA
 
@@ -166,17 +172,22 @@ Dos normas para usarlo:
 - **Revisa todo lo que proponga.** Entiende cada cambio antes de hacer commit. Si no lo entiendes, pide que te lo explique. El objetivo es que aprendas, no solo que la tarea salga.
 - **No le des datos reales.** Ningún documento ni dato personal del refugio en cuentas personales de IA. Cuando trabajes con el repositorio privado, Txin te indicará qué herramientas y cuentas se pueden usar.
 
-## Paso 7. Sigue por este orden
+## Paso 7. Sigue los milestones en orden
 
-**Puedes hacerlo ya.** Estas tareas son genéricas y usan datos ficticios:
+Los issues están agrupados en [milestones](https://github.com/abauntz-sw/libro-edificio/milestones) numerados. Ve del 1 al 7, y dentro de cada uno, por el orden de la tabla:
 
-| Orden | Issue | Qué hay que conseguir |
+| Milestone | Issues | Qué hay que conseguir |
 |---|---|---|
-| 1 | [#5](https://github.com/abauntz-sw/libro-edificio/issues/5) | Entender el prototipo y la base de datos en un proyecto Supabase de pruebas |
-| 2 | 0.7 | Cargar documentos por lotes (`escanear` e `importar`): **lo primero que se programa** |
-| 3 | [#8](https://github.com/abauntz-sw/libro-edificio/issues/8) | Comprobar la base de datos y los permisos en cada push (CI) |
-| 4 | [#6](https://github.com/abauntz-sw/libro-edificio/issues/6) | Ampliar los tipos de instalación y sus plantillas |
-| 5 | 0.6 | Preparar la plantilla del repositorio de un edificio |
+| [1 · Arranque](https://github.com/abauntz-sw/libro-edificio/milestone/1) | #1, #2 | Entorno listo, sesión de arranque y primer Pull Request |
+| [2 · Base de datos](https://github.com/abauntz-sw/libro-edificio/milestone/6) | #5, #8 | Entender la base de datos en un Supabase de pruebas y comprobarla en cada push |
+| [3 · Carga local](https://github.com/abauntz-sw/libro-edificio/milestone/7) | #28, #29, #6 | Tu primer programa: cargar documentos por lotes |
+| [4 · Refugio real](https://github.com/abauntz-sw/libro-edificio/milestone/8) | #3, #4, #9, #10, #11, #30 | Conocer el refugio y su documentación, y cargarla |
+| [5 · App y documentos](https://github.com/abauntz-sw/libro-edificio/milestone/2) | #12, #13, #14, #15, #31 | La aplicación web con el archivo de documentos |
+| [6 · Partes de trabajo](https://github.com/abauntz-sw/libro-edificio/milestone/3) | #16, #17, #18, #19 | Registrar partes desde el móvil, también sin cobertura |
+| [7 · Panel y cierre](https://github.com/abauntz-sw/libro-edificio/milestone/4) | #20, #21, #22, #23 | Panel, alertas, guía de uso y demo final |
+| [Extras](https://github.com/abauntz-sw/libro-edificio/milestone/5) | #24, #25, #26 | Solo si sobra tiempo |
+
+Del 1 al 3 se trabaja con datos ficticios y puedes hacerlos ya. El 4 depende de que se firmen los acuerdos, llegue la documentación y haya fecha de visita. Cuando llegue, se intercala con lo que estés haciendo.
 
 La base ya está en el repositorio:
 
@@ -188,23 +199,6 @@ La base ya está en el repositorio:
 | `edificio-ejemplo-entrada/` | Carpetas desordenadas y su listado, para probar la carga |
 
 Podrá cambiar cuando veas el refugio y su documentación.
-
-**Espera a tener acceso, documentación y fecha de visita.** Estas tareas se apoyan en el refugio real:
-
-| Orden | Issue | Qué hay que conseguir |
-|---|---|---|
-| 6 | [#3](https://github.com/abauntz-sw/libro-edificio/issues/3) | Saber qué documentación hay y elegir cuál entra |
-| 7 | [#4](https://github.com/abauntz-sw/libro-edificio/issues/4) | Conocer el edificio real en la visita |
-| 8 | [#9](https://github.com/abauntz-sw/libro-edificio/issues/9) | Preparar el inventario real del refugio |
-| 9 | Carga real | Cargar la documentación del refugio desde la oficina |
-| 10 | [#10](https://github.com/abauntz-sw/libro-edificio/issues/10) | Reunir las preguntas pendientes para la FNDME |
-| 11 | [#11](https://github.com/abauntz-sw/libro-edificio/issues/11) | Decidir entre PWA y Flutter |
-
-El orden de #3 y #4 puede cambiar según lo que llegue antes: la documentación o la visita.
-
-Cada issue indica qué hay que conseguir, cómo hacerlo y cuándo se considera hecho.
-
-**Después** vienen los bloques B, C y D de los [milestones](https://github.com/abauntz-sw/libro-edificio/milestones).
 
 ## Reglas importantes
 

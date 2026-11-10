@@ -90,7 +90,7 @@ Cierras el issue #1 después de la sesión.
 
 Este paso sirve para practicar el ciclo completo. La tarea es sencilla a propósito.
 
-La primera vez lo hacemos juntos en la sesión de arranque.
+Si no da tiempo a hacerlo juntos en la sesión de arranque, hazlo por tu cuenta y Txin lo revisa.
 
 **5.1. Asígnate el [issue #2](https://github.com/abauntz-sw/libro-edificio/issues/2)** con **Assignees → assign yourself** y lee qué pide. El `LICENSE` ya está añadido, así que no tienes que crearlo.
 
@@ -161,11 +161,11 @@ git branch -d feat/0.1-preparar-repo
 
 ### Trabaja con un agente de IA
 
-Haz el paso 5 a mano, porque es tu ejercicio para aprender Git. Desde el paso 6 puedes apoyarte en un agente de IA:
+Haz el paso 5 a mano, porque es tu ejercicio para aprender Git. Desde el paso 6 trabaja con [Claude Code](https://claude.com/product/claude-code), con el plan Pro. Es la herramienta del proyecto: el agente escribe el código y tú lo diriges y lo revisas.
 
-1. **Para empezar, gratis:** usa [GitHub Copilot Free](https://github.com/features/copilot/plans) en VS Code, en modo agente. Para entender conceptos o resolver dudas, usa también el chat gratuito de [Claude](https://claude.ai/).
-2. **Si eres estudiante,** puedes solicitar [Copilot Student](https://docs.github.com/en/copilot/get-started/plans), que también es gratis.
-3. **Cuando se te quede corto:** avisa a Txin y veremos el paso a [Claude Code](https://claude.com/product/claude-code) con el plan Pro. Es la herramienta que usamos habitualmente.
+- **Ábrelo en la raíz del repositorio.** Al empezar lee [`CLAUDE.md`](../CLAUDE.md), que recoge las reglas del proyecto. Si una regla cambia, actualízalo en el mismo Pull Request.
+- **Dale el issue como punto de partida.** Por ejemplo: «Lee el issue #5 y explícame cómo lo harías antes de cambiar nada».
+- **Pídele que lo pruebe.** Que ejecute las comprobaciones y te enseñe el resultado antes de hacer commit.
 
 Dos normas para usarlo:
 

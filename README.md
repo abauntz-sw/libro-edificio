@@ -6,7 +6,7 @@ El piloto es el Refugio de Belagua, de la FNDME. Ver [`docs/PLAN-BELAGUA.md`](do
 
 Prototipo: https://claude.ai/artifact/LwqrqTDTS3DDUBRMBEQQBT
 
-# Resumen rápido
+## Cómo se arranca
 
 Todavía no hay app. Se pueden ejecutar las comprobaciones de la base de datos:
 
@@ -21,7 +21,7 @@ Hace falta Node.js. No hace falta Docker ni cuenta de Supabase.
 
 Apache 2.0, ver [`LICENSE`](LICENSE).
 
-# Aviso
+## Aviso
 
 Repositorio público: solo datos ficticios. Nada real del refugio aquí.
 
@@ -29,14 +29,14 @@ Repositorio público: solo datos ficticios. Nada real del refugio aquí.
 
 Empieza por [`docs/GUIA-INICIO.md`](docs/GUIA-INICIO.md).
 
-# Estado
+## Estado
 
 En construcción. De momento:
 - [`supabase/`](supabase/README.md): base de datos
 - [`edificio-ejemplo-entrada/`](edificio-ejemplo-entrada/README.md): documentos de ejemplo para la carga
 - [`docs/`](docs/): planes y guía
 
-# Módulos
+## Módulos
 
 - archivo de documentos
 - instalaciones y revisiones

@@ -164,6 +164,22 @@ Se ha propuesto hacer el formulario del técnico en **Flutter** (app nativa) en 
 
 **Dato que decide:** en la visita, anotar qué móviles (Android/iPhone) usan el guarda y los técnicos habituales, y cuánto tiempo pueden estar sin cobertura. Decidir antes de empezar la semana 7 y dejarlo escrito en `docs/decisiones/`.
 
+### 6.2 Carga inicial: archivos y papel
+
+La FNDME tiene parte de la documentación en archivos (.pdf, .docx, .jpg…) y parte en papel. Todo acaba en el mismo flujo de `escanear` e `importar` (tarea **0.7**). El papel y los formatos que no son PDF pasan antes por un paso de preparación (tarea **0.8**):
+
+```text
+Papel ──► escáner, por tandas, con hojas separadoras ──► partir y OCR ──┐
+.docx, .odt ──────────────────────────────────────────► PDF ───────────┼──► escanear ──► listado.csv ──► importar
+.pdf, .jpg ─────────────────────────────────────────────────────────────┘
+```
+
+- **Papel:** se escanea por tandas a PDF. Entre documento y documento va una **hoja separadora** con un código QR, de modo que se pueda escanear un montón seguido con el alimentador automático. Un script parte el PDF por las separadoras y pasa el OCR (`ocrmypdf`) para que el texto se pueda buscar. Resolución de 200–300 ppp. Cada tanda va a su carpeta (`Escaneos AAAA-MM`) y es un `escanear` más: el listado conserva lo ya clasificado.
+- **Textos editables (.docx, .odt):** se convierten a PDF con LibreOffice, para que se lean igual dentro de años. El original no se toca.
+- **PDF e imágenes:** entran tal cual.
+- **Todo en local**, en el ordenador de la oficina. No se envía nada a servicios externos.
+- **Clasificación a mano** en `listado.csv`. Usar IA para proponerla requiere autorización de la FNDME y añadir al proveedor como subencargado en el anexo RGPD (pregunta 12 de la sección 9). Sin esa autorización, no se usa. Solo compensa si el volumen es grande.
+
 ### Bloque A — Base de datos y carga (semanas 1–3)
 
 | Semana | Trabajo | Entregable |
@@ -218,6 +234,7 @@ Si sobra tiempo: **2.3**, **2.1** y **2.5**. Si falta: se aplaza **1.2** y Confi
 | Guarda o empresas no adoptan el formulario | Formulario mínimo, QR en cada instalación, guía de una página, pedir opinión en la semana 9 |
 | Obligaciones normativas mal identificadas | Todo con `verificado = false` hasta la revisión técnica; la aplicación no da consejo normativo |
 | Un error de permisos expone datos | Comprobación automática de cada perfil en el CI, antes de cualquier dato real |
+| Mucho papel sin digitalizar | Escanear por tandas con hojas separadoras (sección 6.2). Cargar primero lo que ya está en archivos |
 | Datos reales en sitios indebidos | Solo en producción y en el repositorio privado. El repositorio público, los tests y `libro-dev`, solo con datos ficticios |
 | El colaborador/a se atasca | Regla de `PLAN.md`: más de medio día atascado → comentarlo en el issue |
 
@@ -241,6 +258,10 @@ Si sobra tiempo: **2.3**, **2.1** y **2.5**. Si falta: se aplaza **1.2** y Confi
 6. ¿Quién es el guarda, todo el año o por temporadas, y qué tareas de mantenimiento hace él mismo?
 7. ¿Quién en la FNDME recibirá las alertas y usará el panel?
 8. ¿Gestiona la FNDME otros refugios? (Si la respuesta es sí, la fase 3 de `PLAN.md`, cartera de edificios, cobra sentido con ellos.)
+9. ¿Cuánta documentación hay? En archivos: cuántos, aproximadamente, y dónde están (carpetas, correo, memorias USB). En papel: cuántas carpetas o cajas. ¿Hay documentos en euskera?
+10. ¿Quién puede escanear el papel y con qué equipo? ¿El escáner o la fotocopiadora tiene alimentador automático y escanea a PDF?
+11. ¿Se puede sacar el papel de la oficina o hay que escanearlo allí?
+12. ¿Autorizaría la FNDME que una IA lea los documentos para proponer cómo clasificarlos? Habría que añadir a su proveedor en el anexo de protección de datos. Si no, se clasifican a mano.
 
 ---
 

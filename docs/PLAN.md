@@ -239,10 +239,11 @@ Cada tarea debe ir en su propia rama y entrar por **Pull Request** con descripci
 | 0.5 | CI: migraciones y comprobación de permisos en cada push | Un permiso roto hace fallar el CI |
 | 0.6 | Plantilla del repositorio de un edificio | Una copia sirve para empezar y su README explica cómo leerla sin la aplicación |
 | 0.7 | **Carga local por lotes:** `escanear` e `importar` | Cargar `edificio-ejemplo-entrada/listado.csv` deja 12 documentos con las mismas huellas que `seed.sql`, y repetirlo no duplica nada |
+| 0.8 | **Preparar el papel y otros formatos:** hojas separadoras, OCR y paso a PDF, todo en local y sin IA | Un PDF escaneado con hojas separadoras queda en un PDF con texto buscable por documento, listo para `escanear` |
 
 **Punto de partida:** `supabase/` ya contiene el esquema, los datos comunes, el albergue ficticio y 69 comprobaciones. Hay que revisarlo y ampliarlo, no crearlo desde cero.
 
-**Orden recomendado:** 0.1, 0.2 y **0.7, que es lo primero que se programa**. Después, 0.5, 0.3 y 0.6.
+**Orden recomendado:** 0.1, 0.2 y **0.7, que es lo primero que se programa**. Después, 0.5, 0.3, 0.6 y 0.8.
 
 **Cómo funciona la carga local:**
 

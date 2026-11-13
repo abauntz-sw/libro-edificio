@@ -1,7 +1,7 @@
 # Piloto: Refugio de Belagua — Plan de desarrollo
 
 > Documento de trabajo para el colaborador/a. Complementa a `PLAN.md`, que sigue siendo la referencia técnica (arquitectura, tecnología y normas de trabajo). **Donde este documento y `PLAN.md` difieran, manda este.**
-> Revisado: 2026-11-06, tras el prototipo y la elección de Supabase. Colaboración **voluntaria y no retribuida**, con fin de aprendizaje, de unos **3 meses a ~20 h/semana orientativas** (≈ 250 h). No hay horario obligatorio: el calendario es una guía, no una obligación. El calendario (sección 6) usa 12 semanas más 1 de margen y aplica los recortes de la sección 6.0.
+> Revisado: 2026-11-13, tras el prototipo, la elección de Supabase y el acuerdo de que los servicios de producción estén a nombre de la FNDME. Colaboración **voluntaria y no retribuida**, con fin de aprendizaje, de unos **3 meses a ~20 h/semana orientativas** (≈ 250 h). No hay horario obligatorio: el calendario es una guía, no una obligación. El calendario (sección 6) usa 12 semanas más 1 de margen y aplica los recortes de la sección 6.0.
 
 ---
 
@@ -82,13 +82,14 @@ El colaborador/a **no** trata directamente con las empresas mantenedoras sin el 
 
 - [ ] **Acuerdo de colaboración voluntaria** firmado.
 - [x] Organizaciones de GitHub creadas: `abauntz-sw` y `nafarmendi`.
+- [ ] Organización de Supabase «Abauntz Software» (plan Free) con el proyecto `libro-dev` en una región concreta de la UE. El colaborador/a entra invitado con el rol *Developer*.
 - [ ] Reunión semanal acordada con el colaborador/a (30 min).
 
 **Antes de cargar cualquier dato real:**
 
 - [ ] Acuerdo con la FNDME: alcance, persona de contacto y permiso para visitar el refugio.
-- [ ] **Encargo de tratamiento (RGPD)** actualizado: Supabase como subencargado, registro de actividad en la base de datos y devolución de los datos al terminar.
-- [ ] Proyecto Supabase **Pro** de producción en una región concreta de la UE, con copias diarias. Decidir quién lo paga y a nombre de quién está.
+- [ ] **Encargo de tratamiento (RGPD)** actualizado: Supabase, el correo y la web de producción como servicios de la FNDME (solo GitHub queda como subencargado), registro de actividad en la base de datos y devolución de los datos al terminar.
+- [ ] Organización de Supabase **a nombre de la FNDME**, que contrata y paga el plan **Pro**, con el proyecto de producción en una región concreta de la UE y copias diarias. El esquema se crea con las migraciones del repositorio, sin `seed.sql`. No se traspasa nada desde `libro-dev`.
 - [ ] Revisar las condiciones de protección de datos de Supabase.
 - [ ] Repositorio privado `nafarmendi/libro-refugio-belagua` con la GitHub App instalada.
 - [ ] Pedir a la FNDME **toda la documentación disponible del refugio**, en el formato en que la tengan.
@@ -115,10 +116,10 @@ Lo que **no** se simplifica: permisos y sus comprobaciones, modo offline y senci
 
 **Entornos del piloto:**
 
-| Entorno | Datos | Plan | Quién entra |
-|---|---|---|---|
-| Local o proyecto `libro-dev` | Solo ficticios | Free | Colaborador/a y tutor |
-| Proyecto de producción | Reales | Pro | Según el encargo de tratamiento |
+| Entorno | Datos | Plan | Titular | Quién entra |
+|---|---|---|---|---|
+| Local o proyecto `libro-dev` | Solo ficticios | Free | Abauntz Software | Colaborador/a y tutor |
+| Proyecto de producción | Reales | Pro | FNDME | Según el encargo de tratamiento |
 
 **Repositorios del piloto:**
 

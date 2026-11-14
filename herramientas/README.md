@@ -3,7 +3,8 @@
 Sirven para cargar de una vez los documentos que ya existen, sin tocar los originales.
 
 ```text
-Carpetas --> escanear --> listado.csv --> rellenar a mano --> importar
+Papel y .docx --> preparar --┐
+Carpetas ---------------------┴--> escanear --> listado.csv --> rellenar a mano --> importar
 ```
 
 
@@ -13,6 +14,61 @@ Hace falta Node.js 24 o posterior. Desde esta carpeta:
 
 ```bash
 npm install
+```
+
+## preparar
+
+Deja el papel escaneado y los textos editables listos para `escanear`. Todo se hace en este ordenador: no se envía nada a ningún servicio, tampoco a una IA.
+
+```bash
+npm run preparar -- --separadora hoja-separadora.pdf
+npm run preparar -- [--salida <carpeta>] [--sin-ocr] <carpeta o archivo> [más carpetas o archivos]
+```
+
+### Cómo se escanea el papel
+
+1. Crea la hoja separadora con `--separadora` e imprime unas cuantas copias. Lleva un código QR.
+2. Haz un montón con los documentos y pon una hoja separadora entre uno y el siguiente.
+3. Escanea el montón seguido a un solo PDF, a 200 o 300 ppp.
+4. Ejecuta `preparar` con ese PDF.
+
+### Qué hace
+
+- **PDF escaneados:** busca las páginas con el QR, corta por ellas y deja un PDF por documento, sin las separadoras. Después pasa el OCR en español y euskera, para que el texto se pueda buscar. Las páginas que ya tienen texto no se rehacen.
+- **`.docx` y `.odt`:** los pasa a PDF con LibreOffice.
+- **El resto** (fotos, por ejemplo) no necesita preparación: entra tal cual en `escanear`.
+- **Salida:** una carpeta nueva por tanda. Si no se dice otra, `Escaneos AAAA-MM`, con el año y el mes de hoy.
+- **Originales:** solo se leen. Tampoco se escribe encima de nada que ya esté en la carpeta de salida.
+
+Un escaneo `tanda.pdf` con tres documentos da `tanda-01.pdf`, `tanda-02.pdf` y `tanda-03.pdf`. Un `acta.docx` da `acta-docx.pdf`.
+
+Con `--sin-ocr` solo corta, sin pasar el OCR. Sirve para probar sin tener instalado `ocrmypdf`.
+
+### Programas que hay que instalar
+
+`preparar` llama a programas de fuera. En Windows:
+
+| Programa | Para qué | Cómo se instala |
+|---|---|---|
+| [Python](https://www.python.org/downloads/windows/) | Lo necesita `ocrmypdf` | Instalador oficial. Marca «Add python.exe to PATH» |
+| [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) | Lee el texto de las imágenes | Instalador de UB Mannheim. En «Additional language data», marca **Spanish** y **Basque** |
+| [Ghostscript](https://ghostscript.com/releases/gsdnld.html) | Lo necesita `ocrmypdf` | Instalador de 64 bits |
+| [OCRmyPDF](https://ocrmypdf.readthedocs.io/en/latest/installation.html) | Pasa el OCR a los PDF | `pip install ocrmypdf` |
+| [LibreOffice](https://es.libreoffice.org/descarga/libreoffice/) | Pasa `.docx` y `.odt` a PDF | Instalador oficial |
+
+Tesseract y Ghostscript tienen que estar en el PATH. Para comprobarlo, abre una terminal nueva:
+
+```bash
+tesseract --list-langs   # deben salir spa y eus
+ocrmypdf --version
+```
+
+LibreOffice se busca en su carpeta habitual. Si está en otro sitio, pon la ruta de `soffice.exe` en la variable `SOFFICE`.
+
+En Ubuntu o Debian basta con:
+
+```bash
+sudo apt-get install ocrmypdf tesseract-ocr-spa tesseract-ocr-eus libreoffice-writer
 ```
 
 ## escanear
@@ -104,6 +160,11 @@ npm run tipos   # comprobación de tipos de TypeScript
 
 | Archivo | Qué hace |
 |---|---|
+| `src/preparar.ts` | La orden `preparar` |
+| `src/tanda.ts` | Prepara una tanda: corta, pasa el OCR y convierte a PDF |
+| `src/separadora.ts` | Crea la hoja separadora |
+| `src/partir.ts` | Encuentra las hojas separadoras y corta el PDF |
+| `src/externos.ts` | Llama a `ocrmypdf` y a LibreOffice |
 | `src/escanear.ts` | La orden `escanear` |
 | `src/importar.ts` | La orden `importar` |
 | `src/comprobar.ts` | Comprueba el listado antes de escribir nada |

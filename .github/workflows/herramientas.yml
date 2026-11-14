@@ -22,5 +22,13 @@ jobs:
         run: npm ci
       - name: Comprueba los tipos
         run: npm run tipos
+      # Programas de fuera que usa «preparar»: OCR en español y euskera, y LibreOffice.
+      - name: Instala ocrmypdf, Tesseract y LibreOffice
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ocrmypdf tesseract-ocr-spa tesseract-ocr-eus libreoffice-writer
+      # Con EXIGIR_PROGRAMAS, las pruebas de OCR y de paso a PDF no se pueden saltar.
       - name: Ejecuta los tests
         run: npm test
+        env:
+          EXIGIR_PROGRAMAS: '1'

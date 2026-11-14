@@ -1,6 +1,6 @@
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { expect, test } from 'vitest'
-import { agrupar, buscarSeparadoras, partir } from '../src/partir.ts'
+import { agrupar, analizar, buscarSeparadoras, partir, yaEstaListo } from '../src/partir.ts'
 import { crearSeparadora } from '../src/separadora.ts'
 import { pdfFicticio } from './ayuda.ts'
 
@@ -40,6 +40,15 @@ test('un PDF sin separadoras queda en un solo documento', async () => {
   const partes = await partir(await pdfFicticio(['Hoja 1', 'Hoja 2']))
   expect(partes).toHaveLength(1)
   expect(await textos(partes[0])).toEqual(['Hoja 1', 'Hoja 2'])
+})
+
+test('analizar cuenta las páginas con texto y las separadoras', async () => {
+  const analisis = await analizar(await pdfFicticio(['Hoja 1', '---', 'Hoja 2']))
+  expect(analisis).toEqual({ paginas: 3, separadoras: [1], paginasConTexto: 3 })
+  expect(yaEstaListo(analisis)).toBe(false)
+  expect(yaEstaListo({ paginas: 2, separadoras: [], paginasConTexto: 2 })).toBe(true)
+  expect(yaEstaListo({ paginas: 2, separadoras: [], paginasConTexto: 1 })).toBe(false)
+  expect(yaEstaListo({ paginas: 0, separadoras: [], paginasConTexto: 0 })).toBe(false)
 })
 
 test('agrupar no crea documentos vacíos', () => {

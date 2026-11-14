@@ -36,6 +36,7 @@ npm run preparar -- [--salida <carpeta>] [--sin-ocr] <carpeta o archivo> [más c
 
 - **PDF escaneados:** busca las páginas con el QR, corta por ellas y deja un PDF por documento, sin las separadoras. Después pasa el OCR en español y euskera, para que el texto se pueda buscar. Las páginas que ya tienen texto no se rehacen.
 - **`.docx` y `.odt`:** los pasa a PDF con LibreOffice.
+- **PDF que ya están listos:** si un PDF no tiene hojas separadoras y todas sus páginas tienen texto, no se toca. Copiarlo cambiaría su huella y `escanear` no lo reconocería como repetido.
 - **El resto** (fotos, por ejemplo) no necesita preparación: entra tal cual en `escanear`.
 - **Salida:** una carpeta nueva por tanda. Si no se dice otra, `Escaneos AAAA-MM`, con el año y el mes de hoy.
 - **Originales:** solo se leen. Tampoco se escribe encima de nada que ya esté en la carpeta de salida.

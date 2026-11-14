@@ -105,6 +105,39 @@ test.skipIf(!conLibreOffice)('un .docx ficticio pasa a PDF y el original sigue i
   expect(await huella(original)).toBe(antes)
 }, 180_000)
 
+test('un PDF con texto y sin hojas separadoras ya está listo y no se toca', async () => {
+  const original = join(carpeta, 'contrato.pdf')
+  await writeFile(original, await pdfFicticio(['Contrato ficticio, hoja 1', 'Contrato ficticio, hoja 2']))
+  const salida = join(carpeta, 'salida')
+
+  const { creados, sinTocar } = await prepararTanda([original], salida, false)
+
+  expect(creados).toEqual([])
+  expect(sinTocar).toEqual([original])
+  expect(await readdir(salida)).toEqual([])
+})
+
+test('un escaneo de un solo documento, sin hojas separadoras, sí se prepara', async () => {
+  const original = join(carpeta, 'acta.pdf')
+  await writeFile(original, await comoEscaneo(await pdfFicticio(['Acta ficticia'])))
+  const salida = join(carpeta, 'salida')
+
+  const { creados, sinTocar } = await prepararTanda([original], salida, false)
+
+  expect(sinTocar).toEqual([])
+  expect(await readdir(salida)).toEqual(['acta.pdf'])
+  expect(creados).toHaveLength(1)
+})
+
+test('un PDF con hojas separadoras se parte aunque ya tenga texto', async () => {
+  const original = join(carpeta, 'lote.pdf')
+  await writeFile(original, await pdfFicticio(['Documento ficticio uno', '---', 'Documento ficticio dos']))
+
+  const { creados } = await prepararTanda([original], join(carpeta, 'salida'), false)
+
+  expect(creados.map(c => c.split(/[\\/]/).pop())).toEqual(['lote-01.pdf', 'lote-02.pdf'])
+})
+
 test('lo que no es PDF, .docx ni .odt no se toca', async () => {
   await writeFile(join(carpeta, 'foto.jpg'), 'no es una foto de verdad')
   const salida = join(carpeta, 'salida')
@@ -116,7 +149,7 @@ test('lo que no es PDF, .docx ni .odt no se toca', async () => {
 
 test('no sobrescribe lo que ya hay en la carpeta de salida', async () => {
   const original = join(carpeta, 'tanda.pdf')
-  await writeFile(original, await pdfFicticio(['Hoja ficticia']))
+  await writeFile(original, await comoEscaneo(await pdfFicticio(['Hoja ficticia'])))
   const salida = join(carpeta, 'salida')
   await prepararTanda([original], salida, false)
   await expect(prepararTanda([original], salida, false)).rejects.toThrow('ya existe y no se sobrescribe')

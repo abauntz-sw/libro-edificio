@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { basename, extname, join, resolve } from 'node:path'
 import { listarArchivos } from './archivos.ts'
 import { aPdf, hayOcr, libreOffice, ocr } from './externos.ts'
-import { partir } from './partir.ts'
+import { analizar, partir, yaEstaListo } from './partir.ts'
 
 /** Formatos de texto editable que se pasan a PDF. */
 export const EDITABLES = ['docx', 'odt']
@@ -26,6 +26,7 @@ export const carpetaDeTanda = (fecha = new Date()) =>
 /**
  * Prepara los archivos de `rutas`, que pueden ser carpetas o archivos sueltos:
  * - cada PDF escaneado se parte por sus hojas separadoras y se le pasa el OCR;
+ * - un PDF sin hojas separadoras y con texto en todas sus páginas ya está listo y no se toca;
  * - cada .docx u .odt se pasa a PDF;
  * - el resto no se toca: entra tal cual en `escanear`.
  * Con `conOcr` en false solo parte, sin OCR.
@@ -60,8 +61,12 @@ export async function prepararTanda(rutas: string[], salida: string, conOcr = tr
   const temporal = await mkdtemp(join(tmpdir(), 'tanda-'))
   try {
     for (const escaneo of escaneos) {
+      const contenido = await readFile(escaneo)
+      const analisis = await analizar(contenido)
+      // Copiarlo cambiaría su huella y `escanear` no lo reconocería como repetido.
+      if (yaEstaListo(analisis)) { resumen.sinTocar.push(escaneo); continue }
       const nombre = basename(escaneo, extname(escaneo))
-      const partes = await partir(await readFile(escaneo))
+      const partes = await partir(contenido, analisis.separadoras)
       for (const [i, parte] of partes.entries()) {
         // Un escaneo con varios documentos da «nombre-01.pdf», «nombre-02.pdf»…
         const sufijo = partes.length > 1 ? `-${String(i + 1).padStart(2, '0')}` : ''

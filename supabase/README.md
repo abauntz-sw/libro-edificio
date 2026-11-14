@@ -29,6 +29,8 @@ select clase, estado, titulo, fecha from avisos order by fecha;
 select instalacion, falta from huecos order by instalacion;
 ```
 
+Las fechas del ejemplo cuentan desde el día de carga, así que cualquier día salen los mismos cuatro avisos: dos vencidos y dos que vencen pronto.
+
 Para repetir la carga, crea un proyecto nuevo o restablece el actual. `seed.sql` no se puede ejecutar dos veces.
 
 ## Reglas

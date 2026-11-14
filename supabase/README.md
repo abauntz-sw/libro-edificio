@@ -8,6 +8,7 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261106000100_datos_comunes.sql` | Carga tipos y plantillas comunes a cualquier edificio |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
+| `config.toml` | Configuración de la CLI de Supabase |
 
 ## Probarlo sin cuenta
 
@@ -17,6 +18,15 @@ No hace falta Docker ni Supabase. Desde la raíz del repositorio:
 npm install --no-save @electric-sql/pglite
 node supabase/tests/comprobar.mjs
 ```
+
+## CI
+
+En cada push y Pull Request, GitHub ejecuta [`.github/workflows/base-de-datos.yml`](../.github/workflows/base-de-datos.yml):
+
+- **Permisos y reglas:** ejecuta `comprobar.mjs`. Si una comprobación falla, el CI sale en rojo y dice cuál.
+- **Migraciones:** aplica las migraciones y `seed.sql` con la CLI de Supabase, en el mismo Postgres que usa Supabase.
+
+`config.toml` es la configuración de la CLI, creada con `supabase init`.
 
 ## Probarlo en Supabase
 

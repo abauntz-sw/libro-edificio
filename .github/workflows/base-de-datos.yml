@@ -1,0 +1,42 @@
+# Comprueba la base de datos en cada push y en cada Pull Request.
+# Si una comprobación falla, el CI sale en rojo y dice cuál.
+name: Base de datos
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  comprobaciones:
+    name: Permisos y reglas (PGlite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      # Versión fija: así una versión nueva de PGlite no rompe el CI por sorpresa.
+      - name: Instala PGlite
+        run: npm install --no-save @electric-sql/pglite@0.5.16
+      - name: Ejecuta comprobar.mjs
+        run: node supabase/tests/comprobar.mjs
+
+  migraciones:
+    name: Migraciones con la CLI de Supabase
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.1.0
+      # Arranca el mismo Postgres que usa Supabase y aplica las migraciones y seed.sql.
+      - name: Aplica migraciones y seed
+        run: supabase db start
+      - name: Comprueba que el seed se ha cargado
+        run: |
+          n=$(psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -tAc "select count(*) from public.partes")
+          echo "Partes cargados: $n"
+          if [ "$n" != "20" ]; then
+            echo "::error title=Seed no cargado::Hay $n partes y se esperaban 20"
+            exit 1
+          fi

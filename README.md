@@ -34,6 +34,7 @@ Empieza por [`docs/GUIA-INICIO.md`](docs/GUIA-INICIO.md).
 En construcción. De momento:
 - [`supabase/`](supabase/README.md): base de datos
 - [`edificio-ejemplo-entrada/`](edificio-ejemplo-entrada/README.md): documentos de ejemplo para la carga
+- [`plantilla-edificio/`](plantilla-edificio/README.md): molde del repositorio privado de cada edificio
 - [`docs/`](docs/): planes y guía
 
 ## Módulos

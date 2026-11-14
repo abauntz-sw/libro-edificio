@@ -46,24 +46,73 @@ Con `--sin-ocr` solo corta, sin pasar el OCR. Sirve para probar sin tener instal
 
 ### Programas que hay que instalar
 
-`preparar` llama a programas de fuera. En Windows:
+`preparar` llama a programas de fuera. En Windows, abre PowerShell y sigue estos pasos en orden. Cada instalador pide permiso con una ventana de Windows.
 
-| Programa | Para qué | Cómo se instala |
-|---|---|---|
-| [Python](https://www.python.org/downloads/windows/) | Lo necesita `ocrmypdf` | Instalador oficial. Marca «Add python.exe to PATH» |
-| [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) | Lee el texto de las imágenes | Instalador de UB Mannheim. En «Additional language data», marca **Spanish** y **Basque** |
-| [Ghostscript](https://ghostscript.com/releases/gsdnld.html) | Lo necesita `ocrmypdf` | Instalador de 64 bits |
-| [OCRmyPDF](https://ocrmypdf.readthedocs.io/en/latest/installation.html) | Pasa el OCR a los PDF | `pip install ocrmypdf` |
-| [LibreOffice](https://es.libreoffice.org/descarga/libreoffice/) | Pasa `.docx` y `.odt` a PDF | Instalador oficial |
+**1. Python.** Lo necesita OCRmyPDF. Si `python --version` no responde, instálalo con el [instalador oficial](https://www.python.org/downloads/windows/) y marca «Add python.exe to PATH».
 
-Tesseract y Ghostscript tienen que estar en el PATH. Para comprobarlo, abre una terminal nueva:
+**2. Tesseract.** Es el programa que lee el texto de las imágenes.
 
-```bash
+```powershell
+winget install --id UB-Mannheim.TesseractOCR -e --interactive
+```
+
+En el asistente, despliega **Additional language data (download)** y marca **Spanish** y **Basque**. No lo confundas con «Additional script data», que está al lado y son alfabetos, no idiomas.
+
+**3. Ghostscript.** Lo necesita OCRmyPDF. No está en `winget`: descarga el instalador de 64 bits de [ghostscript.com](https://ghostscript.com/releases/gsdnld.html) y ejecútalo.
+
+**4. LibreOffice.** Pasa `.docx` y `.odt` a PDF.
+
+```powershell
+winget install --id TheDocumentFoundation.LibreOffice -e
+```
+
+**5. OCRmyPDF.**
+
+```powershell
+pip install ocrmypdf
+```
+
+**6. El PATH.** Ni Tesseract ni, a veces, `pip` dejan sus programas donde Windows los busca. Esto añade las dos carpetas para tu usuario:
+
+```powershell
+$carpetas = 'C:\Program Files\Tesseract-OCR', "$env:APPDATA\Python\Python315\Scripts"
+[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';' + ($carpetas -join ';'), 'User')
+```
+
+La segunda carpeta lleva el número de tu versión de Python: `Python315` es la 3.15. Para saber dónde ha quedado `ocrmypdf.exe`, ejecuta `pip show -f ocrmypdf`.
+
+**7. Comprobar.** Cierra la terminal, abre una nueva y ejecuta:
+
+```powershell
 tesseract --list-langs   # deben salir spa y eus
 ocrmypdf --version
 ```
 
 LibreOffice se busca en su carpeta habitual. Si está en otro sitio, pon la ruta de `soffice.exe` en la variable `SOFFICE`.
+
+#### Si no salen `spa` y `eus`
+
+Faltan los idiomas. Se pueden añadir sin reinstalar y sin permisos de administrador, en una carpeta de tu usuario:
+
+```powershell
+$idiomas = "$env:LOCALAPPDATA\Tesseract-idiomas"
+New-Item -ItemType Directory -Force $idiomas
+Copy-Item 'C:\Program Files\Tesseract-OCR\tessdata\*' $idiomas -Recurse -Exclude 'script'
+foreach ($i in 'spa','eus') { Invoke-WebRequest "https://github.com/tesseract-ocr/tessdata_fast/raw/main/$i.traineddata" -OutFile "$idiomas\$i.traineddata" }
+[Environment]::SetEnvironmentVariable('TESSDATA_PREFIX', $idiomas, 'User')
+```
+
+La variable `TESSDATA_PREFIX` le dice a Tesseract que lea los idiomas de esa carpeta. Hay que copiar todo el contenido de `tessdata`, no solo los idiomas, porque también lleva su configuración. Abre una terminal nueva y repite el paso 7.
+
+#### Si PowerShell no deja ejecutar `npm`
+
+Si sale «la ejecución de scripts está deshabilitada en este sistema», escribe `npm.cmd` en lugar de `npm`, o ejecuta una sola vez:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Comprobado en Windows 11 con Tesseract 5.4, Ghostscript 10.08 y OCRmyPDF 17.14.
 
 En Ubuntu o Debian basta con:
 

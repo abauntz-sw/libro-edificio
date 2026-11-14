@@ -9,11 +9,14 @@ import { fileURLToPath } from 'node:url'
 const base = join(dirname(fileURLToPath(import.meta.url)), '..')
 const db = new PGlite()
 let fallos = 0, total = 0
+const fallidas = []
 
 function ok(cond, texto) {
   total++
-  if (!cond) fallos++
+  if (!cond) { fallos++; fallidas.push(texto) }
   console.log(`${cond ? 'ok   ' : 'FALLO'} ${texto}`)
+  // En GitHub Actions, la línea ::error:: aparece destacada en el resumen del PR.
+  if (!cond && process.env.GITHUB_ACTIONS) console.log(`::error title=Comprobación fallida::${texto}`)
 }
 
 // Lo que Supabase ya trae de serie.
@@ -253,5 +256,6 @@ await como('admin', async () => {
 })
 
 console.log(`\n${total - fallos} de ${total} comprobaciones correctas`)
+if (fallos) console.log(`\nHan fallado:\n${fallidas.map(t => `- ${t}`).join('\n')}`)
 await db.close()
 process.exit(fallos ? 1 : 0)

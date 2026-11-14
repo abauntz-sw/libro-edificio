@@ -114,6 +114,7 @@ ok(await cuenta(`select 1 from public.revisiones r join public.partes p on p.rev
 const sinRls = await filas(`select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`)
 ok(sinRls.length === 0, 'todas las tablas tienen seguridad por filas')
+ok(await cuenta(`select 1 from public.plantilla_revisiones where btrim(fuente) = ''`) === 0, 'toda periodicidad lleva su fuente')
 
 console.log('\nSin sesión')
 await como('anon', async () => {

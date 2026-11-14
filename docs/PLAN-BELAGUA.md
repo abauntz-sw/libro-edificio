@@ -251,7 +251,7 @@ Si sobra tiempo: **2.3**, **2.1** y **2.5**. Si falta: se aplaza **1.2** y Confi
 ## 9. Preguntas para la FNDME (primera reunión)
 
 1. ¿Quién es el propietario del edificio y qué dice la concesión sobre mantenimiento, seguros y documentación?
-2. ¿El refugio está inscrito en el Registro de Turismo de Navarra? ¿Con qué clasificación?
+2. ¿El refugio está inscrito en el Registro de Turismo de Navarra? ¿Con qué clasificación? Si figura como albergue turístico, se le aplica el Decreto Foral 140/2005, que pide un plano de evacuación en cada dependencia. El decreto no menciona los refugios de montaña y deja fuera los alojamientos reservados a los miembros de una organización.
 3. ¿Tiene IEE, Libro del Edificio o documentación de la reforma de c. 2020 (proyecto, final de obra, licencias)?
 4. ¿Qué empresas mantienen cada instalación? ¿Hay contratos firmados?
 5. ¿Cómo es el suministro de agua, el saneamiento, la calefacción y la electricidad?
@@ -262,6 +262,7 @@ Si sobra tiempo: **2.3**, **2.1** y **2.5**. Si falta: se aplaza **1.2** y Confi
 10. ¿Quién puede escanear el papel y con qué equipo? ¿El escáner o la fotocopiadora tiene alimentador automático y escanea a PDF?
 11. ¿Se puede sacar el papel de la oficina o hay que escanearlo allí?
 12. ¿Autorizaría la FNDME que una IA lea los documentos para proponer cómo clasificarlos? Habría que añadir a su proveedor en el anexo de protección de datos. Si no, se clasifican a mano.
+13. ¿Quiere la FNDME que el equipamiento del refugio (literas, colchones, mantas, botiquín, desfibrilador, radio) entre en el Libro? Ya figura como opcional en la sección 3. Mientras no se decida, no se crea ese tipo de instalación.
 
 ---
 

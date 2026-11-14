@@ -6,6 +6,7 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 |---|---|
 | `migrations/20261106000000_esquema_inicial.sql` | Crea las tablas, las reglas y los permisos |
 | `migrations/20261106000100_datos_comunes.sql` | Carga tipos y plantillas comunes a cualquier edificio |
+| `migrations/20261114000000_mas_tipos_y_revisiones.sql` | Añade accesos y salidas de emergencia, y las revisiones de gas y cocina |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 

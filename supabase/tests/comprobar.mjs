@@ -115,6 +115,8 @@ const sinRls = await filas(`select relname from pg_class c join pg_namespace n o
   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`)
 ok(sinRls.length === 0, 'todas las tablas tienen seguridad por filas')
 ok(await cuenta(`select 1 from public.plantilla_revisiones where btrim(fuente) = ''`) === 0, 'toda periodicidad lleva su fuente')
+ok(await cuenta(`select 1 from public.plantilla_revisiones where fuente like '%425/2009%'`) === 0, 'ninguna fuente cita la Orden Foral 425/2009, que está derogada')
+ok(await cuenta(`select 1 from public.plantilla_revisiones where tipo_instalacion_id = 'gas' and periodicidad_meses = 60 and fuente like '%apartados 4.1 y 4.2%' and not verificado`) === 1, 'la revisión de gas cita sus apartados y sigue sin verificar')
 
 console.log('\nSin sesión')
 await como('anon', async () => {

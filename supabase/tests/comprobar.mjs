@@ -77,6 +77,11 @@ async function falla(fn) {
   catch { await db.exec('rollback to savepoint prueba'); return true }
 }
 
+// Fechas relativas a hoy, como en seed.sql, para que las comprobaciones valgan cualquier día.
+const dia = async (desde_hoy = '0 days') =>
+  (await filas('select (current_date + $1::interval)::date::text as d', [desde_hoy]))[0].d
+const hoy = await dia()
+
 const id = async (tabla, campo, valor) => (await filas(`select id from public.${tabla} where ${campo} = $1`, [valor]))[0].id
 const calefaccion = await id('instalaciones', 'tipo_id', 'calefaccion-acs')
 const extintores = await id('instalaciones', 'tipo_id', 'contraincendios')
@@ -87,7 +92,7 @@ const edificio = (await filas('select id from public.edificios'))[0].id
 const parte = (cols, vals, p) => db.query(
   `insert into public.partes (edificio_id, instalacion_id, fecha, tipo, descripcion, ${cols.join(',')})
    values ($1, $2, $3, $4, $5, ${vals})`, p)
-const parteSimple = (inst, tipo, fecha = '2026-11-06', rev = null, prox = null) => db.query(
+const parteSimple = (inst, tipo, fecha = hoy, rev = null, prox = null) => db.query(
   `insert into public.partes (edificio_id, instalacion_id, fecha, tipo, descripcion, revision_id, proxima_revision)
    values ($1, $2, $3, $4, 'Prueba', $5, $6)`, [edificio, inst, fecha, tipo, rev, prox])
 
@@ -97,6 +102,12 @@ ok(await cuenta('select 1 from public.documentos') === 12, '12 documentos')
 ok(await cuenta('select 1 from public.partes') === 20, '20 partes')
 ok(await cuenta('select 1 from public.revisiones') === 4, '4 revisiones')
 ok((await filas(`select count(*) n from public.plantilla_revisiones where verificado`))[0].n == 0, 'ninguna periodicidad figura como verificada')
+ok(await cuenta(`select 1 from public.revisiones r
+  where r.ultima = (select max(p.fecha) from public.partes p where p.revision_id = r.id)`) === 4,
+  'cada revisión toma la fecha de su último parte')
+ok(await cuenta(`select 1 from public.revisiones r join public.partes p on p.revision_id = r.id
+  where r.id = $1 and r.proxima = (p.fecha + interval '12 months')::date`, [revAnual]) === 1,
+  'la revisión anual vence un año después de su parte')
 const sinRls = await filas(`select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`)
 ok(sinRls.length === 0, 'todas las tablas tienen seguridad por filas')
@@ -157,26 +168,26 @@ await como('calor', async () => {
 await como('calor', async () => ok(await falla(() => parteSimple(calefaccion, 'comprobacion')), 'empresa no registra comprobaciones'))
 await como('guarda', async () => ok(await falla(() => parteSimple(extintores, 'preventivo')), 'guarda no registra preventivos'))
 await como('guarda', async () => {
-  await parteSimple(extintores, 'comprobacion', '2026-11-06', revGuarda)
+  await parteSimple(extintores, 'comprobacion', hoy, revGuarda)
 })
-await como('guarda', async () => ok(await falla(() => parteSimple(extintores, 'comprobacion', '2026-11-06', revAnual)), 'guarda no cierra revisiones de otro responsable'))
-await como('guarda', async () => ok(await falla(() => parteSimple(calefaccion, 'comprobacion', '2026-11-06', revGuarda)), 'la revisión debe ser de esa instalación'))
+await como('guarda', async () => ok(await falla(() => parteSimple(extintores, 'comprobacion', hoy, revAnual)), 'guarda no cierra revisiones de otro responsable'))
+await como('guarda', async () => ok(await falla(() => parteSimple(calefaccion, 'comprobacion', hoy, revGuarda)), 'la revisión debe ser de esa instalación'))
 await como('admin', async () => {
-  await parteSimple(extintores, 'preventivo', '2026-11-06', revAnual)
-  const r = (await filas('select ultima, proxima from public.revisiones where id = $1', [revAnual]))[0]
-  const f = d => d.toISOString().slice(0, 10)
-  ok(f(r.proxima) === '2027-11-06', `una revisión periódica pasa a ${f(r.proxima)}`)
-  await parteSimple(extintores, 'preventivo', '2026-10-01', revAnual)
-  const r2 = (await filas('select proxima from public.revisiones where id = $1', [revAnual]))[0]
-  ok(f(r2.proxima) === '2027-11-06', 'un parte atrasado no retrocede la revisión')
-  await parteSimple(calefaccion, 'preventivo', '2026-11-06', revCaldera, '2027-10-15')
-  const r3 = (await filas('select proxima from public.revisiones where id = $1', [revCaldera]))[0]
-  ok(f(r3.proxima) === '2027-10-15', 'sin periodicidad usa la fecha indicada')
+  const proxima = async rev => (await filas('select proxima::text as d from public.revisiones where id = $1', [rev]))[0].d
+  const enUnAno = await dia('12 months')
+  await parteSimple(extintores, 'preventivo', hoy, revAnual)
+  const p1 = await proxima(revAnual)
+  ok(p1 === enUnAno, `una revisión periódica pasa a ${p1}`)
+  await parteSimple(extintores, 'preventivo', await dia('-1 month'), revAnual)
+  ok(await proxima(revAnual) === enUnAno, 'un parte atrasado no retrocede la revisión')
+  const indicada = await dia('11 months')
+  await parteSimple(calefaccion, 'preventivo', hoy, revCaldera, indicada)
+  ok(await proxima(revCaldera) === indicada, 'sin periodicidad usa la fecha indicada')
 })
 await como('guarda', async () => {
   const ident = '88888888-8888-4888-8888-888888888888'
   const envio = `insert into public.partes (id, edificio_id, instalacion_id, fecha, tipo, descripcion)
-    values ('${ident}', '${edificio}', '${extintores}', '2026-11-06', 'comprobacion', 'Reenvío') on conflict (id) do nothing`
+    values ('${ident}', '${edificio}', '${extintores}', '${hoy}', 'comprobacion', 'Reenvío') on conflict (id) do nothing`
   await db.query(envio); await db.query(envio)
   ok(await cuenta(`select 1 from public.partes where id = '${ident}'`) === 1, 'reenviar un parte no lo duplica')
   ok(await falla(() => db.query(`update public.partes set descripcion = 'x'`)), 'un parte no se cambia')
@@ -212,7 +223,7 @@ await como('admin', async () => { await db.query('update public.documentos set e
 
 await como('admin', async () => {
   ok(await falla(() => db.query(`update public.edificios set repositorio = 'otra/org'`)), 'el repositorio no se cambia')
-  await parteSimple(extintores, 'preventivo', '2026-11-06', revAnual)
+  await parteSimple(extintores, 'preventivo', hoy, revAnual)
   await db.query('delete from public.revisiones where id = $1', [revAnual])
   ok(await cuenta(`select 1 from public.partes where descripcion = 'Prueba' and revision_id is null`) === 1, 'borrar una revisión conserva sus partes')
 })
@@ -246,8 +257,16 @@ await como('admin', async () => ok(await falla(() => db.query(`insert into publi
 
 console.log('\nConsultas preparadas')
 await como('admin', async () => {
-  const av = await filas('select clase, estado, titulo from public.avisos order by fecha')
-  ok(av.length > 0, `avisos: ${av.length}`)
+  const av = (await filas('select clase, estado, titulo from public.avisos'))
+    .map(a => `${a.clase} ${a.estado}: ${a.titulo}`)
+  const esperados = [
+    'documento vencido: Contrato de calefacción',
+    'documento pronto: Póliza de seguro 2026',
+    'revision vencido: Mantenimiento de generadores y equipos',
+    'revision pronto: Revisión de extintores y equipos por el titular',
+  ]
+  for (const e of esperados) ok(av.includes(e), `aviso ${e}`)
+  ok(av.length === esperados.length, `no hay más avisos que esos (${av.length})`)
   const hu = await filas('select instalacion, falta from public.huecos')
   ok(hu.length > 0, `documentos que faltan: ${hu.length}`)
 })

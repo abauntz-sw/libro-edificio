@@ -248,6 +248,22 @@ console.log('\nUsuarios')
 await como('admin', async () => {
   ok(await falla(() => db.query(`update public.usuarios set activo = false where perfil = 'admin'`)), 'no se puede dejar el edificio sin administración')
 })
+// Una caducidad pasada deja sin acceso igual que desactivar la cuenta.
+await como('admin', async () => {
+  ok(await falla(() => db.query(`update public.usuarios set acceso_caduca = current_date - 1 where perfil = 'admin'`)),
+    'la última persona administradora no se queda con el acceso caducado')
+})
+await como('admin', async () => {
+  await db.query(`insert into public.usuarios (edificio_id, nombre, perfil, acceso_caduca)
+    values ($1, 'Administración caducada', 'admin', current_date - 1)`, [edificio])
+  ok(await falla(() => db.query(`update public.usuarios set activo = false where nombre = 'Administración de Ejemplo'`)),
+    'una administradora con el acceso caducado no cuenta como otra')
+})
+await como('admin', async () => {
+  await db.query(`insert into public.usuarios (edificio_id, nombre, perfil) values ($1, 'Otra administración', 'admin')`, [edificio])
+  ok(!await falla(() => db.query(`update public.usuarios set acceso_caduca = current_date - 1 where nombre = 'Administración de Ejemplo'`)),
+    'con otra administradora en vigor, sí se puede poner caducidad')
+})
 await como('admin', async () => ok(await falla(() => db.query(`update public.usuarios set auth_id = null where perfil = 'guarda'`)), 'no se cambia el enlace de la sesión'))
 await como('guarda', async () => {
   await db.query(`update public.usuarios set perfil = 'admin' where perfil = 'guarda'`).catch(() => {})

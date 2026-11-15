@@ -8,6 +8,8 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261106000100_datos_comunes.sql` | Carga tipos y plantillas comunes a cualquier edificio |
 | `migrations/20261114000000_mas_tipos_y_revisiones.sql` | Añade accesos y salidas de emergencia, y las revisiones de gas y cocina |
 | `migrations/20261114000100_corrige_fuente_gas.sql` | Corrige la fuente de la revisión de gas, que citaba una orden foral derogada |
+| `migrations/20261115000000_ruta_de_documento.sql` | Obliga a que cada ficha apunte a su propio documento, en `documentos/` |
+| `migrations/20261115000100_ultimo_admin_con_caducidad.sql` | No deja el edificio sin administración por una fecha de caducidad |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |
@@ -51,5 +53,6 @@ Para repetir la carga, crea un proyecto nuevo o restablece el actual. `seed.sql`
 - **Clave pública:** puede estar en la aplicación. Sin un usuario activo no da acceso a nada.
 - **Cambios de tablas:** cada cambio es una migración nueva. No edites una que ya esté aplicada.
 - **Permisos:** todo cambio de permisos lleva su comprobación en `tests/comprobar.mjs`.
-- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo.
+- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo. Su ruta es siempre `documentos/AAAA/<id>.<extensión>`: una ficha no puede apuntar a otro archivo del repositorio.
+- **Tablas y funciones nuevas:** Supabase las abre por defecto a la clave pública. Cada migración que cree una debe quitarle los permisos y dar solo los necesarios. `comprobar.mjs` avisa si se olvida.
 - **Partes:** no se cambian ni se borran. Una corrección es un parte nuevo.

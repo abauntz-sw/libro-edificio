@@ -89,7 +89,7 @@ tesseract --list-langs   # deben salir spa y eus
 ocrmypdf --version
 ```
 
-LibreOffice se busca en su carpeta habitual. Si está en otro sitio, pon la ruta de `soffice.exe` en la variable `SOFFICE`.
+LibreOffice se busca en su carpeta habitual. Si está en otro sitio, pon la ruta de `soffice.exe` en la variable `SOFFICE`. Funciona aunque tengas LibreOffice abierto: `preparar` usa una configuración propia, aparte de la tuya.
 
 #### Si no salen `spa` y `eus`
 

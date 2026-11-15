@@ -2,10 +2,11 @@
 // Todo se ejecuta en este ordenador. No se envía nada a ningún servicio.
 
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { mkdtemp, rename, rm } from 'node:fs/promises'
+import { constants, existsSync } from 'node:fs'
+import { copyFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, extname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
 const ejecutar = promisify(execFile)
@@ -57,15 +58,23 @@ export async function ocr(entrada: string, salida: string): Promise<void> {
   }
 }
 
-/** Convierte un .docx o un .odt a PDF con LibreOffice, sin abrir ventanas. El original solo se lee. */
-export async function aPdf(programa: string, original: string, salida: string): Promise<void> {
-  // LibreOffice elige el nombre del PDF, así que se convierte en una carpeta temporal y luego se mueve.
+/**
+ * Convierte un .docx o un .odt a PDF con LibreOffice, sin abrir ventanas. El original solo se lee.
+ * `perfil` es la carpeta de configuración que usa LibreOffice. Si no se da, una temporal.
+ */
+export async function aPdf(programa: string, original: string, salida: string, perfil?: string): Promise<void> {
+  // LibreOffice elige el nombre del PDF, así que se convierte en una carpeta temporal y luego se copia.
   const temporal = await mkdtemp(join(tmpdir(), 'a-pdf-'))
+  // Con una configuración propia, funciona aunque la persona tenga LibreOffice abierto. Si usara la suya,
+  // le pasaría el trabajo a esa ventana abierta y no crearía el PDF.
+  const configuracion = pathToFileURL(perfil ?? join(temporal, 'perfil')).href
   try {
-    await ejecutar(programa, ['--headless', '--convert-to', 'pdf', '--outdir', temporal, original])
+    await ejecutar(programa, [`-env:UserInstallation=${configuracion}`, '--headless', '--convert-to', 'pdf', '--outdir', temporal, original])
     const creado = join(temporal, `${basename(original, extname(original))}.pdf`)
     if (!existsSync(creado)) throw new Error('LibreOffice no ha creado el PDF')
-    await rename(creado, salida)
+    // Se copia y no se mueve: la carpeta de salida puede estar en otro disco o en la red, y ahí mover falla.
+    // COPYFILE_EXCL: nunca escribe encima de un archivo que ya exista.
+    await copyFile(creado, salida, constants.COPYFILE_EXCL)
   } catch (error) {
     throw fallo(`No se pudo pasar a PDF ${basename(original)}`, error)
   } finally {

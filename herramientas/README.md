@@ -64,7 +64,7 @@ Carga en el Libro los documentos marcados con `si` en el listado.
 npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--origen <carpeta>] [--simular]
 ```
 
-- `--repo` es la dirección del repositorio privado del edificio en GitHub, por ejemplo `https://github.com/<organización>/<edificio>.git`. No hace falta tenerlo clonado.
+- `--repo` es la dirección del repositorio privado del edificio en GitHub, por ejemplo `https://github.com/<organización>/<edificio>.git`. No hace falta tenerlo clonado. Tiene que ser el repositorio que el Libro tiene apuntado para ese edificio. Si es otro, o si el edificio no tiene ninguno apuntado, `importar` se para antes de escribir nada.
 - `--origen` es la carpeta que se escaneó. Las rutas del listado cuentan desde ella. Si no se pone, vale la carpeta del listado.
 - `--simular` comprueba todo y no escribe nada. Con `--simular` no hace falta `--repo`.
 
@@ -128,6 +128,7 @@ npm run tipos   # comprobación de tipos de TypeScript
 | `src/importar.ts` | La orden `importar` |
 | `src/comprobar.ts` | Comprueba el listado antes de escribir nada |
 | `src/repositorio.ts` | Sube los archivos al repositorio del edificio desde una copia temporal |
+| `src/direccion.ts` | Comprueba que la carga va al repositorio del edificio y no a otro |
 | `src/supabase.ts` | Inicia sesión, lee el edificio y registra los documentos |
 | `src/uuid.ts` | Calcula el identificador de cada documento |
 | `src/listado.ts` | Construye las filas y une el listado anterior con el nuevo |

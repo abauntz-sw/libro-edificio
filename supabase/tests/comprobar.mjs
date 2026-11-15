@@ -102,6 +102,10 @@ const parteSimple = (inst, tipo, fecha = hoy, rev = null, prox = null) => db.que
 console.log('\nCarga')
 ok(await cuenta('select 1 from public.instalaciones') === 6, '6 instalaciones')
 ok(await cuenta('select 1 from public.documentos') === 12, '12 documentos')
+// Las fechas del ejemplo cuentan desde hoy: un año escrito a mano dejaría de cuadrar con ellas.
+ok(await cuenta(`select 1 from public.documentos
+  where titulo ~ '\\m(19|20)\\d\\d\\M' or nombre_original ~ '\\m(19|20)\\d\\d\\M'`) === 0,
+  'ningún título ni nombre de archivo del ejemplo lleva un año')
 ok(await cuenta('select 1 from public.partes') === 20, '20 partes')
 ok(await cuenta('select 1 from public.revisiones') === 4, '4 revisiones')
 ok((await filas(`select count(*) n from public.plantilla_revisiones where verificado`))[0].n == 0, 'ninguna periodicidad figura como verificada')
@@ -216,7 +220,7 @@ await como('calor', async () => ok(await falla(() => archivar('99999999-9999-499
 await como('calor', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999995', null)), 'empresa no archiva con la lista vacía'))
 await como('guarda', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999994', [extintores])), 'guarda no archiva'))
 await como('guarda', async () => ok(await falla(() => db.query(`insert into public.documentos (edificio_id,tipo_id,titulo,fecha,ruta,nombre_original,sha256) values ('${edificio}','otro','x','2026-01-01','r','n',repeat('a',64))`)), 'nadie inserta documentos directamente'))
-const doc = await id('documentos', 'titulo', 'Revisión anual de extintores 2026')
+const doc = await id('documentos', 'titulo', 'Revisión anual de extintores')
 await como('admin', async () => {
   await db.query('update public.documentos set eliminado_en = now() where id = $1', [doc])
   ok(await cuenta('select 1 from public.documentos where eliminado_en is not null') === 1, 'admin ve la papelera')
@@ -267,7 +271,7 @@ await como('admin', async () => {
     .map(a => `${a.clase} ${a.estado}: ${a.titulo}`)
   const esperados = [
     'documento vencido: Contrato de calefacción',
-    'documento pronto: Póliza de seguro 2026',
+    'documento pronto: Póliza de seguro',
     'revision vencido: Mantenimiento de generadores y equipos',
     'revision pronto: Revisión de extintores y equipos por el titular',
   ]

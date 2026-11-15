@@ -117,6 +117,17 @@ ok(sinRls.length === 0, 'todas las tablas tienen seguridad por filas')
 ok(await cuenta(`select 1 from public.plantilla_revisiones where btrim(fuente) = ''`) === 0, 'toda periodicidad lleva su fuente')
 
 console.log('\nSin sesión')
+// Supabase da permiso a anon sobre cada tabla y función nueva. La primera migración se los quita,
+// pero solo a lo que había entonces. Esto avisa si una migración futura deja algo abierto.
+const abiertoAAnon = (await filas(`
+  select c.relname as nombre from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p')
+    and (has_table_privilege('anon', c.oid, 'select') or has_table_privilege('anon', c.oid, 'insert')
+      or has_table_privilege('anon', c.oid, 'update') or has_table_privilege('anon', c.oid, 'delete'))
+  union all
+  select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname in ('public', 'interno') and has_function_privilege('anon', p.oid, 'execute')`)).map(f => f.nombre)
+ok(abiertoAAnon.length === 0, `anon no tiene permiso sobre ninguna tabla ni función${abiertoAAnon.length ? `: ${abiertoAAnon.join(', ')}` : ''}`)
 await como('anon', async () => {
   for (const t of ['edificios', 'usuarios', 'documentos', 'partes', 'codigos_acceso', 'avisos']) {
     ok(await falla(() => filas(`select * from public.${t}`)), `anon no puede leer ${t}`)

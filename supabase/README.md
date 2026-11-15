@@ -32,7 +32,7 @@ En cada push y Pull Request, GitHub ejecuta [`.github/workflows/base-de-datos.ym
 ## Probarlo en Supabase
 
 1. Crea un proyecto Free en [supabase.com](https://supabase.com/dashboard). Elige una región concreta de la UE, no la opción general «Europe».
-2. Abre **SQL Editor** y ejecuta, en este orden, las dos migraciones y `seed.sql`.
+2. Abre **SQL Editor** y ejecuta todas las migraciones de `supabase/migrations/`, por orden de nombre, y después `seed.sql`.
 3. Abre **Table Editor** para ver las tablas, o ejecuta:
 
 ```sql

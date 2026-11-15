@@ -1,0 +1,19 @@
+{
+  "name": "libro-edificio-herramientas",
+  "private": true,
+  "type": "module",
+  "description": "Herramientas de carga local del Libro del Edificio",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "escanear": "node src/escanear.ts",
+    "test": "vitest run",
+    "tipos": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

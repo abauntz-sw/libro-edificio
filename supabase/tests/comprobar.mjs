@@ -214,6 +214,18 @@ await como('calor', async () => ok(await falla(() => archivar('99999999-9999-499
 await como('calor', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999995', null)), 'empresa no archiva con la lista vacía'))
 await como('guarda', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999994', [extintores])), 'guarda no archiva'))
 await como('guarda', async () => ok(await falla(() => db.query(`insert into public.documentos (edificio_id,tipo_id,titulo,fecha,ruta,nombre_original,sha256) values ('${edificio}','otro','x','2026-01-01','r','n',repeat('a',64))`)), 'nadie inserta documentos directamente'))
+// Una ficha solo apunta a su propio documento. Si no, la función de archivos entregaría otro archivo del repositorio.
+const d6 = '99999999-9999-4999-8999-999999999996'
+const archivarEn = ruta => filas(`select public.registrar_documento(
+  $1, 'certificado', 'Prueba', '2026-11-06', 'Emisor', $2, 'a.pdf', repeat('a', 64), $3::uuid[]) as id`,
+  [d6, ruta, [calefaccion]])
+for (const ruta of ['indice/documentos.csv', 'README.md', `fotos/2026/${d6}.jpg`, `documentos/2026/${d1}.pdf`, `documentos/2026/../../indice/${d6}.pdf`]) {
+  await como('calor', async () => ok(await falla(() => archivarEn(ruta)), `empresa no archiva una ficha con la ruta ${ruta}`))
+}
+await como('calor', async () => {
+  await archivarEn(`documentos/2026/${d6}.docx`)
+  ok(await cuenta('select 1 from public.documentos where id = $1', [d6]) === 1, 'se archiva un documento que no es PDF')
+})
 const doc = await id('documentos', 'titulo', 'Revisión anual de extintores 2026')
 await como('admin', async () => {
   await db.query('update public.documentos set eliminado_en = now() where id = $1', [doc])

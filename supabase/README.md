@@ -50,5 +50,6 @@ Para repetir la carga, crea un proyecto nuevo o restablece el actual. `seed.sql`
 - **Clave pública:** puede estar en la aplicación. Sin un usuario activo no da acceso a nada.
 - **Cambios de tablas:** cada cambio es una migración nueva. No edites una que ya esté aplicada.
 - **Permisos:** todo cambio de permisos lleva su comprobación en `tests/comprobar.mjs`.
-- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo.
+- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo. Su ruta es siempre `documentos/AAAA/<id>.<extensión>`: una ficha no puede apuntar a otro archivo del repositorio.
+- **Tablas y funciones nuevas:** Supabase las abre por defecto a la clave pública. Cada migración que cree una debe quitarle los permisos y dar solo los necesarios. `comprobar.mjs` avisa si se olvida.
 - **Partes:** no se cambian ni se borran. Una corrección es un parte nuevo.

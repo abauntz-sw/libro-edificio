@@ -10,6 +10,7 @@ import { createInterface } from 'node:readline/promises'
 import { parseArgs } from 'node:util'
 import { comprobarListado, type ErrorFila } from './comprobar.ts'
 import { leerCsv } from './csv.ts'
+import { comprobarRepositorio } from './direccion.ts'
 import { COLUMNAS } from './listado.ts'
 import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, ultimoCommit } from './repositorio.ts'
 import { cargarCatalogo, conectar, iniciarSesion, registrar } from './supabase.ts'
@@ -54,6 +55,8 @@ async function principal(): Promise<void> {
   const cliente = conectar(configuracion('SUPABASE_URL'), configuracion('SUPABASE_CLAVE_PUBLICA'))
   await iniciarSesion(cliente, configuracion('LIBRO_CORREO'), pedirCodigo, process.env.LIBRO_CONTRASENA)
   const catalogo = await cargarCatalogo(cliente)
+  // Lo primero: que se va a subir al repositorio del edificio. Si no, se para antes de mirar nada más.
+  if (repo) comprobarRepositorio(repo, catalogo.repositorio)
 
   // 1. Comprobar toda la hoja, sin escribir nada.
   const { documentos, yaCargadas, noIncluidas, errores } = comprobarListado(filas, catalogo)
@@ -73,10 +76,6 @@ async function principal(): Promise<void> {
   if (documentos.length === 0) {
     console.log('No hay nada nuevo que cargar.')
     return
-  }
-
-  if (!repo.replace(/\.git$/, '').endsWith(catalogo.repositorio)) {
-    console.log(`Aviso: vas a subir a ${repo} y el edificio tiene apuntado el repositorio ${catalogo.repositorio}.`)
   }
 
   // 2. Subir los archivos en un único commit, desde una copia temporal del repositorio que se borra al acabar.

@@ -4,7 +4,8 @@
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, extname, join, resolve } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { listarArchivos } from './archivos.ts'
 import { aPdf, hayOcr, libreOffice, ocr } from './externos.ts'
 import { analizar, partir, yaEstaListo } from './partir.ts'
@@ -22,6 +23,32 @@ export interface Resumen {
 /** Nombre de la carpeta de una tanda: «Escaneos AAAA-MM». */
 export const carpetaDeTanda = (fecha = new Date()) =>
   `Escaneos ${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`
+
+/** Carpeta del repositorio de la aplicación: la que tiene dentro `herramientas/`. */
+export const REPOSITORIO_APP = fileURLToPath(new URL('../..', import.meta.url))
+
+/** Si `ruta` es `carpeta` o está dentro de ella. */
+export function estaDentro(ruta: string, carpeta: string): boolean {
+  const camino = relative(resolve(carpeta), resolve(ruta))
+  return camino === '' || (camino !== '..' && !camino.startsWith(`..${sep}`) && !isAbsolute(camino))
+}
+
+/**
+ * Carpeta donde se guarda la tanda. Si no se dice, «Escaneos AAAA-MM» junto a la primera ruta de entrada.
+ * Nunca dentro del repositorio de la aplicación: es público, y un `git add .` subiría documentos reales.
+ */
+export function carpetaDeSalida(rutas: string[], salida?: string, repositorio = REPOSITORIO_APP, fecha = new Date()): string {
+  const elegida = resolve(salida ?? join(dirname(resolve(rutas[0])), carpetaDeTanda(fecha)))
+  if (estaDentro(elegida, repositorio)) {
+    throw new Error(
+      `No se guarda nada dentro del repositorio de la aplicación (${resolve(repositorio)}), porque es público: ` +
+      'un «git add .» subiría los documentos. ' +
+      (salida ? `La carpeta de salida, ${elegida}, está dentro. ` : `Sin --salida, la tanda iría a ${elegida}, junto a la primera entrada. `) +
+      'Elige una carpeta de fuera con --salida. No se ha creado nada.',
+    )
+  }
+  return elegida
+}
 
 /**
  * Da a cada archivo un nombre de salida, sin extensión, que no se repite.

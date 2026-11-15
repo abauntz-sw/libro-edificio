@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { parseArgs } from 'node:util'
 import { crearSeparadora } from './separadora.ts'
-import { carpetaDeTanda, prepararTanda } from './tanda.ts'
+import { carpetaDeSalida, prepararTanda } from './tanda.ts'
 
 const USO = [
   'Uso: npm run preparar -- [--salida <carpeta>] [--sin-ocr] <carpeta o archivo> [más carpetas o archivos]',
@@ -36,7 +36,7 @@ async function principal(): Promise<void> {
     if (!existsSync(ruta)) throw new Error(`No existe la ruta: ${ruta}`)
   }
 
-  const salida = values.salida ?? carpetaDeTanda()
+  const salida = carpetaDeSalida(rutas, values.salida)
   const { creados, sinTocar } = await prepararTanda(rutas, salida, !values['sin-ocr'])
   console.log(`${salida}: ${creados.length} PDF creados${values['sin-ocr'] ? ', sin OCR' : ''}.`)
   if (sinTocar.length > 0) console.log(`${sinTocar.length} archivos no necesitan preparación y siguen en su sitio.`)

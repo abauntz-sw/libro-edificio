@@ -8,7 +8,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { huella } from '../src/archivos.ts'
 import { hayOcr, libreOffice } from '../src/externos.ts'
-import { carpetaDeTanda, nombresDeSalida, prepararTanda } from '../src/tanda.ts'
+import { carpetaDeSalida, carpetaDeTanda, nombresDeSalida, prepararTanda, REPOSITORIO_APP } from '../src/tanda.ts'
 import { pdfFicticio } from './ayuda.ts'
 
 // En el CI los programas de fuera están instalados y sus pruebas son obligatorias.
@@ -191,4 +191,30 @@ test('nombresDeSalida no repite nombres, tampoco cambiando mayúsculas', () => {
 test('la carpeta de la tanda se llama «Escaneos AAAA-MM»', () => {
   expect(carpetaDeTanda(new Date(2026, 10, 14))).toBe('Escaneos 2026-11')
   expect(carpetaDeTanda(new Date(2027, 0, 3))).toBe('Escaneos 2027-01')
+})
+
+test('sin --salida, la tanda va junto a la primera entrada', () => {
+  const repositorio = join(carpeta, 'libro-edificio')
+  const noviembre = new Date(2026, 10, 14)
+  expect(carpetaDeSalida([join(carpeta, 'papel', 'Caja 1'), join(carpeta, 'otra')], undefined, repositorio, noviembre))
+    .toBe(join(carpeta, 'papel', 'Escaneos 2026-11'))
+  expect(carpetaDeSalida([join(carpeta, 'papel', 'tanda.pdf')], undefined, repositorio, noviembre))
+    .toBe(join(carpeta, 'papel', 'Escaneos 2026-11'))
+})
+
+test('la salida nunca queda dentro del repositorio de la aplicación', () => {
+  const repositorio = join(carpeta, 'libro-edificio')
+  const fuera = join(carpeta, 'papel', 'tanda.pdf')
+  // Con --salida, como «--salida Escaneos» ejecutado desde herramientas/.
+  expect(() => carpetaDeSalida([fuera], join(repositorio, 'herramientas', 'Escaneos'), repositorio)).toThrow('No se ha creado nada')
+  expect(() => carpetaDeSalida([fuera], repositorio, repositorio)).toThrow('No se ha creado nada')
+  // Sin --salida, si la entrada está dentro del repositorio, como los datos de ejemplo.
+  expect(() => carpetaDeSalida([join(repositorio, 'edificio-ejemplo-entrada', 'entrada')], undefined, repositorio)).toThrow('Sin --salida')
+  // Una carpeta de al lado cuyo nombre empieza igual no está dentro.
+  expect(carpetaDeSalida([fuera], join(carpeta, 'libro-edificio-escaneos'), repositorio)).toBe(join(carpeta, 'libro-edificio-escaneos'))
+})
+
+test('el repositorio de la aplicación es la carpeta que tiene herramientas/', () => {
+  expect(existsSync(join(REPOSITORIO_APP, 'herramientas', 'package.json'))).toBe(true)
+  expect(existsSync(join(REPOSITORIO_APP, 'supabase', 'migrations'))).toBe(true)
 })

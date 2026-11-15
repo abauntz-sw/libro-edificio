@@ -38,7 +38,7 @@ npm run preparar -- [--salida <carpeta>] [--sin-ocr] <carpeta o archivo> [más c
 - **`.docx` y `.odt`:** los pasa a PDF con LibreOffice.
 - **PDF que ya están listos:** si un PDF no tiene hojas separadoras y todas sus páginas tienen texto, no se toca. Copiarlo cambiaría su huella y `escanear` no lo reconocería como repetido.
 - **El resto** (fotos, por ejemplo) no necesita preparación: entra tal cual en `escanear`.
-- **Salida:** una carpeta nueva por tanda. Si no se dice otra, `Escaneos AAAA-MM`, con el año y el mes de hoy.
+- **Salida:** una carpeta nueva por tanda. Si no se dice otra con `--salida`, `Escaneos AAAA-MM`, con el año y el mes de hoy, junto a la primera carpeta o archivo de entrada. Nunca dentro de este repositorio, que es público: si la carpeta de salida queda dentro, `preparar` se para sin crear nada.
 - **Originales:** solo se leen. Tampoco se escribe encima de nada que ya esté en la carpeta de salida: si ya tiene alguno de los nombres, `preparar` se para antes de crear nada.
 
 Un escaneo `tanda.pdf` con tres documentos da `tanda-01.pdf`, `tanda-02.pdf` y `tanda-03.pdf`. Un `acta.docx` da `acta-docx.pdf`.

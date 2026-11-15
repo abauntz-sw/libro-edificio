@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { ErrorHttp, esFecha, esPdf, leerFicha, rutaDocumento, sha256 } from '../ficha.ts'
+import { ErrorHttp, esFecha, esPdf, esRutaDeDocumento, leerFicha, rutaDocumento, sha256 } from '../ficha.ts'
 
 const ID = '99999999-9999-4999-8999-999999999991'
 const INSTALACION = '11111111-2222-4333-8444-555555555555'
@@ -59,6 +59,20 @@ Deno.test('esFecha solo acepta fechas que existen', () => {
 
 Deno.test('la ruta es la misma que usa la herramienta de carga local', () => {
   assertEquals(rutaDocumento(ID, '2021-06-30'), `documentos/2021/${ID}.pdf`)
+})
+
+Deno.test('esRutaDeDocumento solo acepta la ruta de ese mismo documento', () => {
+  assertEquals(esRutaDeDocumento(`documentos/2021/${ID}.pdf`, ID), true)
+  // La herramienta de carga local también guarda otros formatos.
+  assertEquals(esRutaDeDocumento(`documentos/2021/${ID}.docx`, ID), true)
+
+  assertEquals(esRutaDeDocumento('indice/documentos.csv', ID), false)
+  assertEquals(esRutaDeDocumento('README.md', ID), false)
+  assertEquals(esRutaDeDocumento(`fotos/2026/${ID}.jpg`, ID), false)
+  assertEquals(esRutaDeDocumento(`documentos/2021/${INSTALACION}.pdf`, ID), false, 'la de otro documento')
+  assertEquals(esRutaDeDocumento(`documentos/2021/../../indice/${ID}.pdf`, ID), false)
+  assertEquals(esRutaDeDocumento(`documentos/2021/${ID}.pdf/x`, ID), false)
+  assertEquals(esRutaDeDocumento(`documentos/2021/${ID}`, ID), false, 'sin extensión')
 })
 
 Deno.test('esPdf mira cómo empieza el archivo, no su nombre', () => {

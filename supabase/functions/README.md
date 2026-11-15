@@ -47,6 +47,8 @@ Repetir una subida con el mismo `id` y el mismo archivo no duplica nada. Así un
 
 La función busca la ficha con la sesión de la persona. La base de datos solo se la da si puede verla. Si no, responde «No se encuentra ese documento», igual que si no existiera.
 
+Solo entrega archivos de `documentos/`, con la forma `documentos/AAAA/<id>.<extensión>`. Si una ficha apunta a otro archivo del repositorio, como el índice o una foto, responde lo mismo: «No se encuentra ese documento».
+
 ### Respuestas
 
 Cuando algo no vale, responde un JSON con el motivo: `{"error": "El archivo no es un PDF."}`.

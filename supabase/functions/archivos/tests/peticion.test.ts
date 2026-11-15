@@ -232,6 +232,26 @@ Deno.test('una sesión caducada pide volver a entrar', async () => {
   assertEquals(respuesta.status, 401)
 })
 
+Deno.test('una ficha que apunta a otro archivo del repositorio no se descarga', async () => {
+  // Una empresa puede crear con registrar_documento una ficha suya que apunte al índice,
+  // que tiene la lista de todos los documentos del edificio.
+  const edificio = edificioDeMentira()
+  edificio.archivos.set('indice/documentos.csv', new TextEncoder().encode('ruta;tipo;titulo\n'))
+  edificio.documentos.set(ID, {
+    ruta: 'indice/documentos.csv', nombreOriginal: 'indice.pdf', sha256: 'a'.repeat(64), instalaciones: [CALDERA],
+  })
+  let lecturas = 0
+  const leer = edificio.piezas.almacen().leer
+  edificio.piezas.almacen().leer = (...datos) => { lecturas++; return leer(...datos) }
+
+  const respuesta = await enSilencio(() => edificio.descargar('calor'))
+  assertEquals(respuesta.status, 404)
+  assertEquals(lecturas, 0, 'no se llega a pedir el archivo a GitHub')
+  // Responde igual que si el documento no existiera.
+  const inexistente = await edificio.descargar('calor', '99999999-9999-4999-8999-999999999999')
+  assertEquals(await respuesta.text(), await inexistente.text())
+})
+
 Deno.test('si la ficha existe pero el archivo no está, responde que no se encuentra', async () => {
   const edificio = edificioDeMentira()
   await edificio.subir('admin')

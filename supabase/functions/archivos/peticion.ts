@@ -4,7 +4,7 @@
 // y al final se crea la ficha. Si el último paso falla, queda un archivo sin ficha, que no hace daño.
 // Nunca queda una ficha sin archivo.
 
-import { ErrorHttp, esPdf, esUuid, leerFicha, LIMITE_BYTES, rutaDocumento, sha256 } from './ficha.ts'
+import { ErrorHttp, esPdf, esRutaDeDocumento, esUuid, leerFicha, LIMITE_BYTES, rutaDocumento, sha256 } from './ficha.ts'
 import type { Almacen } from './github.ts'
 import type { Libro } from './libro.ts'
 
@@ -90,6 +90,12 @@ async function descargar(peticion: Request, libro: Libro, piezas: Piezas): Promi
   const documento = await libro.documento(id)
   const edificio = documento && await libro.edificio()
   if (!documento || !edificio) throw noEsta
+  // Solo se entregan documentos. Una ficha que apunta a otro archivo, como el índice o una foto,
+  // la ha creado alguien a propósito con registrar_documento para leer lo que no le toca.
+  if (!esRutaDeDocumento(documento.ruta, id)) {
+    console.error(`Ficha ${id} con una ruta que no es de un documento: ${documento.ruta}`)
+    throw noEsta
+  }
 
   const contenido = await piezas.almacen().leer(edificio.repositorio, documento.ruta)
   if (!contenido) {

@@ -40,6 +40,16 @@ export function esFecha(texto: string): boolean {
 /** Ruta de un documento dentro del repositorio del edificio. La misma que usa la herramienta de carga local. */
 export const rutaDocumento = (id: string, fecha: string) => `documentos/${fecha.slice(0, 4)}/${id}.pdf`
 
+/**
+ * Dice si una ruta es la de ese documento: documentos/AAAA/<id>.<extensión>.
+ * La extensión puede ser otra que pdf, porque la herramienta de carga local también guarda otros formatos.
+ * Así una ficha no puede apuntar a otro archivo del repositorio, como el índice o una foto.
+ */
+export function esRutaDeDocumento(ruta: string, id: string): boolean {
+  // id ya viene comprobado como UUID: solo lleva cifras, letras de la a a la f y guiones.
+  return esUuid(id) && new RegExp(`^documentos/[0-9]{4}/${id}\\.[a-z0-9]+$`).test(ruta)
+}
+
 /** Un PDF empieza siempre por «%PDF-». Así no se cuela otro archivo con el nombre cambiado. */
 export function esPdf(bytes: Uint8Array): boolean {
   const firma = [0x25, 0x50, 0x44, 0x46, 0x2d]

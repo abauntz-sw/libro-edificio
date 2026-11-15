@@ -123,6 +123,17 @@ ok(await cuenta(`select 1 from public.plantilla_revisiones where fuente like '%4
 ok(await cuenta(`select 1 from public.plantilla_revisiones where tipo_instalacion_id = 'gas' and periodicidad_meses = 60 and fuente like '%apartados 4.1 y 4.2%' and not verificado`) === 1, 'la revisión de gas cita sus apartados y sigue sin verificar')
 
 console.log('\nSin sesión')
+// Supabase da permiso a anon sobre cada tabla y función nueva. La primera migración se los quita,
+// pero solo a lo que había entonces. Esto avisa si una migración futura deja algo abierto.
+const abiertoAAnon = (await filas(`
+  select c.relname as nombre from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p')
+    and (has_table_privilege('anon', c.oid, 'select') or has_table_privilege('anon', c.oid, 'insert')
+      or has_table_privilege('anon', c.oid, 'update') or has_table_privilege('anon', c.oid, 'delete'))
+  union all
+  select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname in ('public', 'interno') and has_function_privilege('anon', p.oid, 'execute')`)).map(f => f.nombre)
+ok(abiertoAAnon.length === 0, `anon no tiene permiso sobre ninguna tabla ni función${abiertoAAnon.length ? `: ${abiertoAAnon.join(', ')}` : ''}`)
 await como('anon', async () => {
   for (const t of ['edificios', 'usuarios', 'documentos', 'partes', 'codigos_acceso', 'avisos']) {
     ok(await falla(() => filas(`select * from public.${t}`)), `anon no puede leer ${t}`)
@@ -225,6 +236,18 @@ await como('calor', async () => ok(await falla(() => archivar('99999999-9999-499
 await como('calor', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999995', null)), 'empresa no archiva con la lista vacía'))
 await como('guarda', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999994', [extintores])), 'guarda no archiva'))
 await como('guarda', async () => ok(await falla(() => db.query(`insert into public.documentos (edificio_id,tipo_id,titulo,fecha,ruta,nombre_original,sha256) values ('${edificio}','otro','x','2026-01-01','r','n',repeat('a',64))`)), 'nadie inserta documentos directamente'))
+// Una ficha solo apunta a su propio documento. Si no, la función de archivos entregaría otro archivo del repositorio.
+const d6 = '99999999-9999-4999-8999-999999999996'
+const archivarEn = ruta => filas(`select public.registrar_documento(
+  $1, 'certificado', 'Prueba', '2026-11-06', 'Emisor', $2, 'a.pdf', repeat('a', 64), $3::uuid[]) as id`,
+  [d6, ruta, [calefaccion]])
+for (const ruta of ['indice/documentos.csv', 'README.md', `fotos/2026/${d6}.jpg`, `documentos/2026/${d1}.pdf`, `documentos/2026/../../indice/${d6}.pdf`]) {
+  await como('calor', async () => ok(await falla(() => archivarEn(ruta)), `empresa no archiva una ficha con la ruta ${ruta}`))
+}
+await como('calor', async () => {
+  await archivarEn(`documentos/2026/${d6}.docx`)
+  ok(await cuenta('select 1 from public.documentos where id = $1', [d6]) === 1, 'se archiva un documento que no es PDF')
+})
 const doc = await id('documentos', 'titulo', 'Revisión anual de extintores')
 await como('admin', async () => {
   await db.query('update public.documentos set eliminado_en = now() where id = $1', [doc])
@@ -246,6 +269,22 @@ await como('admin', async () => {
 console.log('\nUsuarios')
 await como('admin', async () => {
   ok(await falla(() => db.query(`update public.usuarios set activo = false where perfil = 'admin'`)), 'no se puede dejar el edificio sin administración')
+})
+// Una caducidad pasada deja sin acceso igual que desactivar la cuenta.
+await como('admin', async () => {
+  ok(await falla(() => db.query(`update public.usuarios set acceso_caduca = current_date - 1 where perfil = 'admin'`)),
+    'la última persona administradora no se queda con el acceso caducado')
+})
+await como('admin', async () => {
+  await db.query(`insert into public.usuarios (edificio_id, nombre, perfil, acceso_caduca)
+    values ($1, 'Administración caducada', 'admin', current_date - 1)`, [edificio])
+  ok(await falla(() => db.query(`update public.usuarios set activo = false where nombre = 'Administración de Ejemplo'`)),
+    'una administradora con el acceso caducado no cuenta como otra')
+})
+await como('admin', async () => {
+  await db.query(`insert into public.usuarios (edificio_id, nombre, perfil) values ($1, 'Otra administración', 'admin')`, [edificio])
+  ok(!await falla(() => db.query(`update public.usuarios set acceso_caduca = current_date - 1 where nombre = 'Administración de Ejemplo'`)),
+    'con otra administradora en vigor, sí se puede poner caducidad')
 })
 await como('admin', async () => ok(await falla(() => db.query(`update public.usuarios set auth_id = null where perfil = 'guarda'`)), 'no se cambia el enlace de la sesión'))
 await como('guarda', async () => {

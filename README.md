@@ -8,14 +8,24 @@ Prototipo: https://claude.ai/artifact/LwqrqTDTS3DDUBRMBEQQBT
 
 ## Cómo se arranca
 
-Todavía no hay app. Se pueden ejecutar las comprobaciones de la base de datos:
+La aplicación web está en [`app/`](app/README.md). De momento es un esqueleto: deja entrar y muestra el nombre del edificio.
+
+```bash
+cd app
+npm install
+npm run dev
+```
+
+Antes, copia `app/.env.ejemplo` como `app/.env` y rellénalo.
+
+También se pueden ejecutar las comprobaciones de la base de datos, desde la raíz:
 
 ```bash
 npm install --no-save @electric-sql/pglite
 node supabase/tests/comprobar.mjs
 ```
 
-Hace falta Node.js. No hace falta Docker ni cuenta de Supabase.
+Hace falta Node.js. Para las comprobaciones no hace falta Docker ni cuenta de Supabase.
 
 ## Licencia
 
@@ -32,6 +42,7 @@ Empieza por [`docs/GUIA-INICIO.md`](docs/GUIA-INICIO.md).
 ## Estado
 
 En construcción. De momento:
+- [`app/`](app/README.md): aplicación web
 - [`supabase/`](supabase/README.md): base de datos
 - [`edificio-ejemplo-entrada/`](edificio-ejemplo-entrada/README.md): documentos de ejemplo para la carga
 - [`plantilla-edificio/`](plantilla-edificio/README.md): molde del repositorio privado de cada edificio

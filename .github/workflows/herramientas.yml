@@ -1,0 +1,26 @@
+# Comprueba las herramientas de carga en cada push y en cada Pull Request.
+name: Herramientas
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Tipos y tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: herramientas
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+      # npm ci instala justo las versiones apuntadas en package-lock.json.
+      - name: Instala las dependencias
+        run: npm ci
+      - name: Comprueba los tipos
+        run: npm run tipos
+      - name: Ejecuta los tests
+        run: npm test

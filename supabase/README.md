@@ -7,6 +7,7 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261106000000_esquema_inicial.sql` | Crea las tablas, las reglas y los permisos |
 | `migrations/20261106000100_datos_comunes.sql` | Carga tipos y plantillas comunes a cualquier edificio |
 | `migrations/20261114000000_mas_tipos_y_revisiones.sql` | Añade accesos y salidas de emergencia, y las revisiones de gas y cocina |
+| `migrations/20261114000100_corrige_fuente_gas.sql` | Corrige la fuente de la revisión de gas, que citaba una orden foral derogada |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |
@@ -33,7 +34,7 @@ En cada push y Pull Request, GitHub ejecuta [`.github/workflows/base-de-datos.ym
 ## Probarlo en Supabase
 
 1. Crea un proyecto Free en [supabase.com](https://supabase.com/dashboard). Elige una región concreta de la UE, no la opción general «Europe».
-2. Abre **SQL Editor** y ejecuta, en este orden, las dos migraciones y `seed.sql`.
+2. Abre **SQL Editor** y ejecuta todas las migraciones de `supabase/migrations/`, por orden de nombre, y después `seed.sql`.
 3. Abre **Table Editor** para ver las tablas, o ejecuta:
 
 ```sql

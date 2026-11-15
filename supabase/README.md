@@ -23,7 +23,7 @@ node supabase/tests/comprobar.mjs
 
 ## CI
 
-En cada push y Pull Request, GitHub ejecuta [`.github/workflows/base-de-datos.yml`](../.github/workflows/base-de-datos.yml):
+En cada Pull Request, y otra vez al entrar en `main`, GitHub ejecuta [`.github/workflows/base-de-datos.yml`](../.github/workflows/base-de-datos.yml):
 
 - **Permisos y reglas:** ejecuta `comprobar.mjs`. Si una comprobación falla, el CI sale en rojo y dice cuál.
 - **Migraciones:** aplica las migraciones y `seed.sql` con la CLI de Supabase, en el mismo Postgres que usa Supabase.

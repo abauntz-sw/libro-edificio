@@ -1,8 +1,11 @@
-# Comprueba la aplicación web en cada push y en cada Pull Request.
+# Comprueba la aplicación web en cada Pull Request y al entrar en main.
 name: Aplicación
 
+# El push solo en main: en una rama con PR, el pull_request ya lo comprueba.
+# Con push en todas las ramas, cada cambio de un PR se comprobaría dos veces.
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:

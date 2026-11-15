@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 supabase/.temp/
+
+# Por si acaso: tandas de preparar y listados de escanear, que pueden llevar documentos reales.
+herramientas/Escaneos*/
+herramientas/*.csv

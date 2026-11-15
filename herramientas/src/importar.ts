@@ -1,6 +1,7 @@
 // importar: carga en el Libro los documentos marcados con «si» en el listado.
-// Uso: npm run importar -- --listado listado.csv --repo <clon-del-edificio> [--origen <carpeta>] [--simular]
+// Uso: npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--origen <carpeta>] [--simular]
 // Primero comprueba toda la hoja. Si hay un solo error, no escribe nada.
+// No deja copias en el equipo: sube los archivos desde una carpeta temporal que se borra al terminar.
 
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -10,10 +11,10 @@ import { parseArgs } from 'node:util'
 import { comprobarListado, type ErrorFila } from './comprobar.ts'
 import { leerCsv } from './csv.ts'
 import { COLUMNAS } from './listado.ts'
-import { comprobarArchivos, comprobarClon, commitDe, copiarDocumentos, guardarYSubir, remoto } from './repositorio.ts'
+import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, ultimoCommit } from './repositorio.ts'
 import { cargarCatalogo, conectar, iniciarSesion, registrar } from './supabase.ts'
 
-const USO = 'Uso: npm run importar -- --listado listado.csv --repo <clon-del-edificio> [--origen <carpeta>] [--simular]'
+const USO = 'Uso: npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--origen <carpeta>] [--simular]'
 
 /** Lee un dato de la configuración (archivo .env) y avisa si falta. */
 function configuracion(nombre: string): string {
@@ -58,12 +59,10 @@ async function principal(): Promise<void> {
   const { documentos, yaCargadas, noIncluidas, errores } = comprobarListado(filas, catalogo)
   const archivos = await comprobarArchivos(documentos, origen)
   const todos: ErrorFila[] = [...errores, ...archivos.errores].sort((a, b) => a.fila - b.fila)
-  const delClon = repo ? await comprobarClon(repo) : []
 
-  if (todos.length > 0 || delClon.length > 0) {
+  if (todos.length > 0) {
     for (const e of todos) console.error(`Fila ${e.fila}: ${e.mensaje}`)
-    for (const mensaje of delClon) console.error(mensaje)
-    throw new Error(`Hay ${todos.length + delClon.length} errores. No se ha escrito nada.`)
+    throw new Error(`Hay ${todos.length} errores. No se ha escrito nada.`)
   }
 
   console.log(`Listado correcto: ${documentos.length} para cargar, ${yaCargadas.length} ya estaban en el Libro, ${noIncluidas} sin incluir.`)
@@ -76,21 +75,23 @@ async function principal(): Promise<void> {
     return
   }
 
-  const direccion = await remoto(repo)
-  if (!direccion.replace(/\.git$/, '').endsWith(catalogo.repositorio)) {
-    console.log(`Aviso: el clon sube a ${direccion} y el edificio tiene apuntado el repositorio ${catalogo.repositorio}.`)
+  if (!repo.replace(/\.git$/, '').endsWith(catalogo.repositorio)) {
+    console.log(`Aviso: vas a subir a ${repo} y el edificio tiene apuntado el repositorio ${catalogo.repositorio}.`)
   }
 
-  // 2. Copiar los archivos y subirlos en un único commit.
-  const copiados = await copiarDocumentos(repo, origen, documentos)
-  const conCommit = await guardarYSubir(repo, `Carga de ${documentos.length} documentos`)
-  console.log(`Repositorio: ${copiados} archivos copiados, ${conCommit ? 'un commit nuevo' : 'sin commit nuevo'}, subido.`)
+  // 2. Subir los archivos en un único commit, desde una copia temporal del repositorio que se borra al acabar.
+  const commit = await conCopiaTemporal(repo, documentos.map(doc => doc.ruta), async copia => {
+    const copiados = await copiarDocumentos(copia, origen, documentos)
+    const conCommit = await guardarYSubir(copia, `Carga de ${documentos.length} documentos`)
+    console.log(`Repositorio: ${copiados} archivos nuevos, ${conCommit ? 'un commit nuevo' : 'sin commit nuevo'}, subido.`)
+    return ultimoCommit(copia)
+  })
 
   // 3. Crear las fichas. Va lo último: puede quedar un archivo sin ficha, pero nunca una ficha sin archivo.
   const fallos: ErrorFila[] = []
   for (const doc of documentos) {
     try {
-      await registrar(cliente, doc, archivos.bytes.get(doc.fila) ?? null, await commitDe(repo, doc.ruta) || null)
+      await registrar(cliente, doc, archivos.bytes.get(doc.fila) ?? null, commit)
     } catch (error) {
       fallos.push({ fila: doc.fila, mensaje: error instanceof Error ? error.message : String(error) })
     }

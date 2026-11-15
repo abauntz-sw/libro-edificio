@@ -1,9 +1,11 @@
-// Copia los documentos al clon del repositorio del edificio y los sube en un único commit.
-// Los originales solo se leen.
+// Sube los documentos al repositorio del edificio en un único commit.
+// Trabaja en una copia parcial y temporal del repositorio, que se borra al terminar:
+// en el equipo no queda ningún documento. Los originales solo se leen.
 
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdir, stat } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { huella } from './archivos.ts'
@@ -12,7 +14,7 @@ import { LIMITE_GITHUB_BYTES } from './listado.ts'
 
 const ejecutar = promisify(execFile)
 
-/** Ejecuta una orden de Git dentro del clon y devuelve lo que escribe. */
+/** Ejecuta una orden de Git dentro de la copia y devuelve lo que escribe. */
 async function git(repo: string, ...argumentos: string[]): Promise<string> {
   const { stdout } = await ejecutar('git', argumentos, { cwd: repo, maxBuffer: 64 * 1024 * 1024 })
   return stdout.trim()
@@ -41,21 +43,38 @@ export async function comprobarArchivos(documentos: Documento[], origen: string)
   return { errores, bytes }
 }
 
-/** Comprueba que la carpeta es un clon de Git con un remoto y sin cambios ajenos a la carga. Devuelve los problemas. */
-export async function comprobarClon(repo: string): Promise<string[]> {
-  if (!existsSync(join(repo, '.git'))) return [`${repo} no es un clon de Git`]
-  const remotos = (await git(repo, 'remote')).split('\n')
-  if (!remotos.includes('origin')) return [`${repo} no tiene el remoto «origin», así que no se puede subir`]
-
-  // Se admiten cambios dentro de documentos/: son los de una carga anterior que se cortó.
-  const ajenos = (await git(repo, 'status', '--porcelain'))
-    .split('\n')
-    .filter(linea => linea !== '' && !linea.slice(3).replaceAll('"', '').startsWith('documentos/'))
-  return ajenos.length > 0 ? [`${repo} tiene cambios sin guardar que no son de la carga. Guárdalos o descártalos antes`] : []
+/**
+ * Prepara una copia parcial del repositorio del edificio en una carpeta temporal, ejecuta la tarea y borra la copia.
+ * La copia se borra siempre, también si la tarea falla.
+ *
+ * De lo que ya hay en el repositorio solo se bajan las rutas de esta carga, por si alguna se subió en un intento anterior.
+ * El resto de los documentos no llega al equipo.
+ */
+export async function conCopiaTemporal<T>(direccion: string, rutas: string[], tarea: (copia: string) => Promise<T>): Promise<T> {
+  const copia = await mkdtemp(join(tmpdir(), 'libro-carga-'))
+  try {
+    try {
+      // --filter=blob:none: no baja el contenido de los archivos. --depth 1: solo el último commit. --no-checkout: no saca nada todavía.
+      // core.autocrlf=false: los archivos se guardan tal cual, sin cambiar los saltos de línea. Si no, cambiaría su huella.
+      await ejecutar('git', ['clone', '--quiet', '--filter=blob:none', '--depth', '1', '--no-checkout', '-c', 'core.autocrlf=false', direccion, copia])
+    } catch (error) {
+      const detalle = error instanceof Error ? error.message : String(error)
+      throw new Error(`No he podido abrir el repositorio ${direccion}. Comprueba la dirección y que tienes permiso. ${detalle}`)
+    }
+    // A la carpeta solo se sacan las rutas de esta carga. Se escriben en el archivo donde Git las lee:
+    // pasarlas como argumentos tiene un límite de largo y una carga puede traer cientos.
+    await git(copia, 'config', 'core.sparseCheckout', 'true')
+    await mkdir(join(copia, '.git', 'info'), { recursive: true })
+    await writeFile(join(copia, '.git', 'info', 'sparse-checkout'), rutas.map(ruta => `/${ruta}\n`).join(''))
+    // Un repositorio recién creado no tiene ningún commit, así que no hay nada que sacar.
+    const conCommits = await git(copia, 'rev-parse', '--verify', '--quiet', 'HEAD').then(() => true, () => false)
+    if (conCommits) await git(copia, 'read-tree', '-mu', 'HEAD')
+    return await tarea(copia)
+  } finally {
+    // Git deja archivos de solo lectura y en Windows a veces tarda en soltarlos: por eso los reintentos.
+    await rm(copia, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  }
 }
-
-/** Dirección del remoto «origin» del clon. */
-export const remoto = (repo: string) => git(repo, 'remote', 'get-url', 'origin')
 
 /**
  * Copia cada original a su ruta del repositorio. Si el archivo ya está con el mismo contenido, no lo toca.
@@ -77,17 +96,20 @@ export async function copiarDocumentos(repo: string, origen: string, documentos:
 }
 
 /**
- * Hace un único commit con lo copiado y lo sube. Si no hay nada nuevo que guardar, solo sube:
- * así se completa una carga que se cortó entre el commit y el push.
+ * Hace un único commit con lo copiado y lo sube. Si no hay nada nuevo, porque todo se subió en un intento anterior, no hace nada.
  * Devuelve si ha hecho commit.
  */
 export async function guardarYSubir(repo: string, mensaje: string): Promise<boolean> {
   await git(repo, 'add', '--', 'documentos')
   const pendientes = await git(repo, 'diff', '--cached', '--name-only')
-  if (pendientes !== '') await git(repo, 'commit', '-m', mensaje)
+  if (pendientes === '') return false
+  await git(repo, 'commit', '-m', mensaje)
   await git(repo, 'push', 'origin', 'HEAD')
-  return pendientes !== ''
+  return true
 }
 
-/** Identificador del commit que guardó un archivo. */
-export const commitDe = (repo: string, ruta: string) => git(repo, 'log', '-1', '--format=%H', '--', ruta)
+/**
+ * Identificador del último commit del repositorio, que es el que se apunta en cada ficha.
+ * La copia parcial no trae la historia, así que no se sabe qué commit guardó cada archivo. El último los contiene todos.
+ */
+export const ultimoCommit = (repo: string) => git(repo, 'rev-parse', 'HEAD')

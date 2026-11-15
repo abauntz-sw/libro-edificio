@@ -150,15 +150,27 @@ El listado abre en Excel en español: UTF-8 con BOM y separador `;`.
 
 **El listado de un edificio real lleva nombres de documentos reales. No lo guardes nunca en este repositorio.**
 
+### Con los documentos en una carpeta de red
+
+Las carpetas pueden estar en un servidor: `\\servidor\carpeta\documentos`. Leer por la red es más lento, pero funciona igual.
+
+Guarda el listado en esa misma carpeta de red, junto a los documentos, y no en tu equipo:
+
+```powershell
+npm run escanear -- --salida \\servidor\carpeta\listado.csv \\servidor\carpeta\documentos
+```
+
+Escribe estas rutas en PowerShell. En Git Bash las barras `\\` del principio se pierden.
+
 ## importar
 
 Carga en el Libro los documentos marcados con `si` en el listado.
 
 ```bash
-npm run importar -- --listado listado.csv --repo <clon-del-edificio> [--origen <carpeta>] [--simular]
+npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--origen <carpeta>] [--simular]
 ```
 
-- `--repo` es la carpeta donde está clonado el repositorio privado del edificio.
+- `--repo` es la dirección del repositorio privado del edificio en GitHub, por ejemplo `https://github.com/<organización>/<edificio>.git`. No hace falta tenerlo clonado.
 - `--origen` es la carpeta que se escaneó. Las rutas del listado cuentan desde ella. Si no se pone, vale la carpeta del listado.
 - `--simular` comprueba todo y no escribe nada. Con `--simular` no hace falta `--repo`.
 
@@ -177,9 +189,17 @@ Copia `.env.ejemplo` como `.env` y rellénalo: la dirección del proyecto de Sup
 ### Qué hace, en orden
 
 1. **Comprueba toda la hoja.** Tipo, título, fechas, instalaciones, y que cada archivo sigue en su sitio y no ha cambiado. Muestra todos los errores juntos, con su número de fila. Con un solo error no escribe nada.
-2. **Copia los archivos** al clon, en `documentos/AAAA/<id>.ext`. El año es el de la fecha del documento. Los originales solo se leen.
-3. **Hace un único commit y lo sube.**
-4. **Crea las fichas** en Supabase con `registrar_documento` y muestra un resumen: cargados, saltados y con error.
+2. **Abre una copia temporal del repositorio.** Es parcial: de los documentos que ya hay en el repositorio no baja ninguno.
+3. **Copia los archivos** a esa copia, en `documentos/AAAA/<id>.ext`. El año es el de la fecha del documento. Los originales solo se leen.
+4. **Hace un único commit y lo sube.**
+5. **Borra la copia temporal**, también si algo ha fallado.
+6. **Crea las fichas** en Supabase con `registrar_documento` y muestra un resumen: cargados, saltados y con error.
+
+### No deja copias en el equipo
+
+`importar` no guarda ningún documento en el equipo desde el que se hace la carga. La copia temporal vive en la carpeta de temporales del sistema solo mientras dura la subida.
+
+Si el programa se cierra a la fuerza a mitad de la subida (se cierra la ventana o se apaga el equipo), la carpeta no se llega a borrar. Se llama `libro-carga-…` y está en la carpeta de temporales (`$env:TEMP` en PowerShell). Bórrala a mano.
 
 ### Cómo se rellena el listado
 
@@ -218,7 +238,7 @@ npm run tipos   # comprobación de tipos de TypeScript
 | `src/escanear.ts` | La orden `escanear` |
 | `src/importar.ts` | La orden `importar` |
 | `src/comprobar.ts` | Comprueba el listado antes de escribir nada |
-| `src/repositorio.ts` | Copia los archivos al clon, hace el commit y lo sube |
+| `src/repositorio.ts` | Sube los archivos al repositorio del edificio desde una copia temporal |
 | `src/supabase.ts` | Inicia sesión, lee el edificio y registra los documentos |
 | `src/uuid.ts` | Calcula el identificador de cada documento |
 | `src/listado.ts` | Construye las filas y une el listado anterior con el nuevo |

@@ -1,0 +1,29 @@
+# Comprueba la aplicación web en cada push y en cada Pull Request.
+name: Aplicación
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Tipos, tests y construcción
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+      # npm ci instala justo las versiones apuntadas en package-lock.json.
+      - name: Instala las dependencias
+        run: npm ci
+      - name: Comprueba los tipos
+        run: npm run tipos
+      - name: Ejecuta los tests
+        run: npm test
+      # Construye la web igual que al publicarla. Aquí no hacen falta las claves.
+      - name: Construye la aplicación
+        run: npm run build

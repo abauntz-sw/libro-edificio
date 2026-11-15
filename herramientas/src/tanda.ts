@@ -2,9 +2,9 @@
 // Los originales solo se leen.
 
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, extname, join, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { listarArchivos } from './archivos.ts'
 import { aPdf, hayOcr, libreOffice, ocr } from './externos.ts'
 import { analizar, partir, yaEstaListo } from './partir.ts'
@@ -22,6 +22,31 @@ export interface Resumen {
 /** Nombre de la carpeta de una tanda: «Escaneos AAAA-MM». */
 export const carpetaDeTanda = (fecha = new Date()) =>
   `Escaneos ${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`
+
+/**
+ * Da a cada archivo un nombre de salida, sin extensión, que no se repite.
+ * Los escáneres llaman a sus archivos «scan0001.pdf», «scan0002.pdf»…, así que dos carpetas pueden traer el mismo nombre.
+ * Entonces se le pone delante el nombre de su carpeta: «Caja 1 - scan0001». Si aun así se repite, un número: «(2)».
+ * Se compara sin distinguir mayúsculas, como hace Windows con los nombres de archivo.
+ */
+export function nombresDeSalida(archivos: string[], nombre: (archivo: string) => string): Map<string, string> {
+  const veces = new Map<string, number>()
+  for (const archivo of archivos) {
+    const clave = nombre(archivo).toLowerCase()
+    veces.set(clave, (veces.get(clave) ?? 0) + 1)
+  }
+  const usados = new Set<string>()
+  const nombres = new Map<string, string>()
+  for (const archivo of archivos) {
+    const propio = nombre(archivo)
+    const base = veces.get(propio.toLowerCase())! > 1 ? `${basename(dirname(archivo))} - ${propio}` : propio
+    let elegido = base
+    for (let n = 2; usados.has(elegido.toLowerCase()); n++) elegido = `${base} (${n})`
+    usados.add(elegido.toLowerCase())
+    nombres.set(archivo, elegido)
+  }
+  return nombres
+}
 
 /**
  * Prepara los archivos de `rutas`, que pueden ser carpetas o archivos sueltos:
@@ -47,10 +72,24 @@ export async function prepararTanda(rutas: string[], salida: string, conOcr = tr
     throw new Error('No encuentro LibreOffice. Instálalo como explica el README.')
   }
 
+  // Cada escaneo da «nombre.pdf», o «nombre-01.pdf», «nombre-02.pdf»… si trae varios documentos.
+  // Un editable conserva su extensión en el nombre, para que «a.docx» y «a.odt» no choquen: «a-docx.pdf».
+  const nombres = nombresDeSalida([...escaneos, ...editables], archivo =>
+    escaneos.includes(archivo) ? basename(archivo, extname(archivo)) : `${basename(archivo, extname(archivo))}-${extension(archivo)}`)
+
+  // También antes de empezar: si la carpeta de salida ya tiene uno de esos nombres, se para sin crear nada.
+  const yaHay = existsSync(salida) ? (await readdir(salida)).map(n => n.toLowerCase()) : []
+  for (const [archivo, nombre] of nombres) {
+    const propio = nombre.toLowerCase()
+    const choca = yaHay.find(n => n === `${propio}.pdf` || (n.startsWith(`${propio}-`) && /^-\d{2}\.pdf$/.test(n.slice(propio.length))))
+    if (choca) throw new Error(`${join(salida, choca)} ya existe y no se sobrescribe. Usa otra carpeta de salida. (Viene de ${archivo}.) No se ha creado nada.`)
+  }
+
   await mkdir(salida, { recursive: true })
   const resumen: Resumen = { creados: [], sinTocar: archivos.filter(a => !escaneos.includes(a) && !editables.includes(a)) }
 
-  // Nunca se escribe encima de un archivo que ya está en la carpeta de salida.
+  // Nunca se escribe encima de un archivo que ya está en la carpeta de salida. Ya se ha comprobado arriba;
+  // esto es por si dos nombres coinciden al añadir los números de las partes.
   const destino = (nombre: string): string => {
     const completo = join(salida, nombre)
     if (existsSync(completo)) throw new Error(`${completo} ya existe y no se sobrescribe. Usa otra carpeta de salida.`)
@@ -65,7 +104,7 @@ export async function prepararTanda(rutas: string[], salida: string, conOcr = tr
       const analisis = await analizar(contenido)
       // Copiarlo cambiaría su huella y `escanear` no lo reconocería como repetido.
       if (yaEstaListo(analisis)) { resumen.sinTocar.push(escaneo); continue }
-      const nombre = basename(escaneo, extname(escaneo))
+      const nombre = nombres.get(escaneo)!
       const partes = await partir(contenido, analisis.separadoras)
       for (const [i, parte] of partes.entries()) {
         // Un escaneo con varios documentos da «nombre-01.pdf», «nombre-02.pdf»…
@@ -77,9 +116,10 @@ export async function prepararTanda(rutas: string[], salida: string, conOcr = tr
         await ocr(sinOcr, final)
       }
     }
+    // LibreOffice usa una carpeta de configuración propia, la misma para toda la tanda. Ver aPdf.
+    const perfil = join(temporal, 'libreoffice')
     for (const editable of editables) {
-      // El nombre conserva la extensión original para que «a.docx» y «a.odt» no choquen.
-      await aPdf(programa!, editable, destino(`${basename(editable, extname(editable))}-${extension(editable)}.pdf`))
+      await aPdf(programa!, editable, destino(`${nombres.get(editable)!}.pdf`), perfil)
     }
   } finally {
     await rm(temporal, { recursive: true, force: true })

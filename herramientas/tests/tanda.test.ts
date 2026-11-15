@@ -1,14 +1,14 @@
 import { createCanvas } from '@napi-rs/canvas'
 import { existsSync } from 'node:fs'
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { PDFDocument } from 'pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { huella } from '../src/archivos.ts'
 import { hayOcr, libreOffice } from '../src/externos.ts'
-import { carpetaDeTanda, prepararTanda } from '../src/tanda.ts'
+import { carpetaDeTanda, nombresDeSalida, prepararTanda } from '../src/tanda.ts'
 import { pdfFicticio } from './ayuda.ts'
 
 // En el CI los programas de fuera están instalados y sus pruebas son obligatorias.
@@ -153,6 +153,39 @@ test('no sobrescribe lo que ya hay en la carpeta de salida', async () => {
   const salida = join(carpeta, 'salida')
   await prepararTanda([original], salida, false)
   await expect(prepararTanda([original], salida, false)).rejects.toThrow('ya existe y no se sobrescribe')
+})
+
+test('dos escaneos con el mismo nombre en carpetas distintas no chocan', async () => {
+  // Los escáneres repiten nombres como «scan0001.pdf» en cada tanda.
+  for (const caja of ['Caja 1', 'Caja 2']) {
+    await mkdir(join(carpeta, 'entrada', caja), { recursive: true })
+    await writeFile(join(carpeta, 'entrada', caja, 'scan0001.pdf'), await comoEscaneo(await pdfFicticio([`Documento ficticio de la ${caja}`])))
+  }
+  const salida = join(carpeta, 'salida')
+
+  const { creados } = await prepararTanda([join(carpeta, 'entrada')], salida, false)
+
+  expect((await readdir(salida)).sort()).toEqual(['Caja 1 - scan0001.pdf', 'Caja 2 - scan0001.pdf'])
+  expect(creados).toHaveLength(2)
+})
+
+test('si la carpeta de salida ya tiene uno de los nombres, se para antes de crear nada', async () => {
+  for (const letra of ['a', 'b']) {
+    await writeFile(join(carpeta, `${letra}.pdf`), await comoEscaneo(await pdfFicticio([`Hoja ficticia ${letra}`])))
+  }
+  const salida = join(carpeta, 'salida')
+  await mkdir(salida)
+  await writeFile(join(salida, 'b.pdf'), 'de una tanda anterior')
+
+  await expect(prepararTanda([join(carpeta, 'a.pdf'), join(carpeta, 'b.pdf')], salida, false)).rejects.toThrow('No se ha creado nada')
+  // Antes se creaba a.pdf y se paraba en b.pdf: la carpeta quedaba a medias.
+  expect(await readdir(salida)).toEqual(['b.pdf'])
+})
+
+test('nombresDeSalida no repite nombres, tampoco cambiando mayúsculas', () => {
+  const nombre = (archivo: string) => basename(archivo, '.pdf')
+  const nombres = nombresDeSalida([join('A', 'Caja', 'scan.pdf'), join('B', 'Caja', 'SCAN.pdf'), join('C', 'otro.pdf')], nombre)
+  expect([...nombres.values()]).toEqual(['Caja - scan', 'Caja - SCAN (2)', 'otro'])
 })
 
 test('la carpeta de la tanda se llama «Escaneos AAAA-MM»', () => {

@@ -39,9 +39,11 @@ npm run preparar -- [--salida <carpeta>] [--sin-ocr] <carpeta o archivo> [más c
 - **PDF que ya están listos:** si un PDF no tiene hojas separadoras y todas sus páginas tienen texto, no se toca. Copiarlo cambiaría su huella y `escanear` no lo reconocería como repetido.
 - **El resto** (fotos, por ejemplo) no necesita preparación: entra tal cual en `escanear`.
 - **Salida:** una carpeta nueva por tanda. Si no se dice otra, `Escaneos AAAA-MM`, con el año y el mes de hoy.
-- **Originales:** solo se leen. Tampoco se escribe encima de nada que ya esté en la carpeta de salida.
+- **Originales:** solo se leen. Tampoco se escribe encima de nada que ya esté en la carpeta de salida: si ya tiene alguno de los nombres, `preparar` se para antes de crear nada.
 
 Un escaneo `tanda.pdf` con tres documentos da `tanda-01.pdf`, `tanda-02.pdf` y `tanda-03.pdf`. Un `acta.docx` da `acta-docx.pdf`.
+
+Si dos archivos de carpetas distintas se llaman igual, como los `scan0001.pdf` de dos cajas, delante va el nombre de su carpeta: `Caja 1 - scan0001.pdf` y `Caja 2 - scan0001.pdf`.
 
 Con `--sin-ocr` solo corta, sin pasar el OCR. Sirve para probar sin tener instalado `ocrmypdf`.
 

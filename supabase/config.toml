@@ -402,6 +402,11 @@ deno_version = 2
 [functions.archivos]
 verify_jwt = false
 
+# Exportación diaria. La lanza la tarea programada con la clave secreta en la cabecera `apikey`,
+# que la comprobación automática no entiende. La función compara la clave en su código.
+[functions.exportar]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

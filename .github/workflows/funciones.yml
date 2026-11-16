@@ -10,11 +10,15 @@ on:
 
 jobs:
   tests:
-    name: Tipos y tests (Deno)
+    name: Tipos y tests (Deno), ${{ matrix.funcion }}
     runs-on: ubuntu-latest
+    # Una vez por cada función, cada una en su carpeta.
+    strategy:
+      matrix:
+        funcion: [archivos, exportar]
     defaults:
       run:
-        working-directory: supabase/functions/archivos
+        working-directory: supabase/functions/${{ matrix.funcion }}
     steps:
       - uses: actions/checkout@v5
       # Las funciones de Supabase se ejecutan con Deno, así que se prueban con Deno.

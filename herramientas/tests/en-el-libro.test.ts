@@ -104,7 +104,8 @@ test('importar aparta solo las filas que se le dicen, avisa de las que no puede 
   await crear('Papel/choca.pdf', 'en el Libro también')
   await crear('Papel/[en-el-libro]/choca.pdf', 'otro con el mismo nombre')
   const listado = join(carpeta, 'listado.csv')
-  const filas = [cargado, pendiente, 'Papel/choca.pdf'].map(ruta => ({ ...Object.fromEntries(COLUMNAS.map(c => [c, ''])), ruta_original: ruta }))
+  const filas: Record<string, string>[] = [cargado, pendiente, 'Papel/choca.pdf'].map(ruta => ({ ...Object.fromEntries(COLUMNAS.map(c => [c, ''])), ruta_original: ruta }))
+  filas[1].duplicado_de = cargado
   await writeFile(listado, escribirCsv(COLUMNAS, filas), 'utf8')
 
   // Filas 2 y 4 de la hoja: la primera y la tercera. La tercera es relativa y cuenta desde la carpeta del listado.
@@ -117,6 +118,8 @@ test('importar aparta solo las filas que se le dicen, avisa de las que no puede 
   expect(existsSync(pendiente)).toBe(true)
   const guardado = leerCsv(await readFile(listado, 'utf8')).filas.map(f => f.ruta_original)
   expect(guardado).toEqual([destinoEnElLibro(cargado), pendiente, 'Papel/choca.pdf'])
+  // La fila que era copia de la apartada la sigue.
+  expect(leerCsv(await readFile(listado, 'utf8')).filas[1].duplicado_de).toBe(destinoEnElLibro(cargado))
 })
 
 test('si no se mueve nada, no toca el listado', async () => {

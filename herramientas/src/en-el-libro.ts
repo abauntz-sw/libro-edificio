@@ -12,6 +12,7 @@ import { chmod, mkdir, rename, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { CARPETA_EN_EL_LIBRO } from './archivos.ts'
 import { escribirCsv, type Fila } from './csv.ts'
+import { claveDeRuta } from './listado.ts'
 import { rutaDelOriginal } from './repositorio.ts'
 
 export { CARPETA_EN_EL_LIBRO }
@@ -66,17 +67,24 @@ export interface Apartado {
  */
 export async function apartarCargadas(listado: string, columnas: string[], filas: Fila[], numeros: number[], origen: string): Promise<Apartado> {
   const resultado: Apartado = { apartados: 0, avisos: [], listadoAlDia: true }
+  const nuevaRuta = new Map<string, string>()
   for (const numero of numeros) {
     const fila = filas[numero - 2]
     const ruta = rutaDelOriginal(origen, fila.ruta_original)
     if (estaEnElLibro(ruta)) continue
     const movimiento = await apartar(ruta)
     if (movimiento.movido) {
+      nuevaRuta.set(claveDeRuta(fila.ruta_original), movimiento.destino)
       fila.ruta_original = movimiento.destino
       resultado.apartados++
     } else {
       resultado.avisos.push(`Fila ${numero}: no se ha apartado a [en-el-libro] porque ${movimiento.motivo}. Ya está en el Libro: no hace falta repetir nada.`)
     }
+  }
+  // Un duplicado apunta al primero por su ruta: si ese se ha apartado, se le sigue.
+  for (const fila of filas) {
+    const destino = fila.duplicado_de ? nuevaRuta.get(claveDeRuta(fila.duplicado_de)) : undefined
+    if (destino) fila.duplicado_de = destino
   }
   if (resultado.apartados > 0) {
     try {

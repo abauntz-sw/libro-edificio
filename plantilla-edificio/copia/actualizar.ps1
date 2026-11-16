@@ -11,6 +11,9 @@ param(
   [string]$Carpeta = (Split-Path -Parent $PSScriptRoot)
 )
 
+# Git escribe en UTF-8. Sin esto, PowerShell lo lee con la codificación antigua de Windows y las tildes salen mal.
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+
 $registro = Join-Path $Carpeta '.git\copia-registro.txt'
 function Apuntar([string]$texto) {
   $linea = '{0}  {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm'), $texto

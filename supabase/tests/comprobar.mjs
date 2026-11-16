@@ -271,8 +271,31 @@ await como('admin', async () => {
   ]
   for (const e of esperados) ok(av.includes(e), `aviso ${e}`)
   ok(av.length === esperados.length, `no hay más avisos que esos (${av.length})`)
-  const hu = await filas('select instalacion, falta from public.huecos')
-  ok(hu.length > 0, `documentos que faltan: ${hu.length}`)
+})
+
+console.log('\nHuecos')
+const huecos = async () => (await filas('select instalacion, falta from public.huecos order by 1, 2'))
+  .map(h => `${h.instalacion}: ${h.falta}`)
+const huecosEsperados = [
+  'Agua de consumo: Certificado',
+  'Calefacción y agua caliente: Certificado',
+  'Cubierta y fachada: Informe',
+  'Instalación eléctrica: Contrato de mantenimiento',
+  'Protección contra incendios: Acta de inspección',
+  'Saneamiento: Contrato de mantenimiento',
+  'Saneamiento: Informe',
+]
+await como('admin', async () => {
+  const hu = await huecos()
+  ok(hu.join('|') === huecosEsperados.join('|'), `el albergue tiene los ${huecosEsperados.length} huecos esperados (${hu.length})`)
+
+  // Un documento en la papelera ya no cubre su hueco. Al recuperarlo, vuelve a cubrirlo.
+  const inspeccion = await id('documentos', 'titulo', 'Inspección de baja tensión')
+  const nuevo = 'Instalación eléctrica: Acta de inspección'
+  await db.query('update public.documentos set eliminado_en = now() where id = $1', [inspeccion])
+  ok((await huecos()).includes(nuevo), 'un documento en la papelera vuelve a contar como hueco')
+  await db.query('update public.documentos set eliminado_en = null where id = $1', [inspeccion])
+  ok(!(await huecos()).includes(nuevo), 'al recuperarlo deja de ser un hueco')
 })
 
 console.log(`\n${total - fallos} de ${total} comprobaciones correctas`)

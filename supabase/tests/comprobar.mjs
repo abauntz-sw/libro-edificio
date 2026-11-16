@@ -343,8 +343,10 @@ await comoServicio(async () => {
   ok(Object.keys(indice).sort().join() === 'indice/documentos.csv,indice/instalaciones.csv,indice/partes.csv,indice/revisiones.csv',
     'exporta los cuatro CSV a indice/')
   // La marca BOM se mira dentro de la base de datos: al pasar a JavaScript, PGlite la quita del principio.
-  const plantilla = readFileSync(join(base, '..', 'plantilla-edificio', 'indice', 'documentos.csv'), 'utf8').replace(/^﻿/, '')
-  ok(indice['indice/documentos.csv'].replace(/^﻿/, '').startsWith(plantilla), 'documentos.csv lleva la cabecera de la plantilla, con \\r\\n')
+  for (const archivo of Object.keys(indice)) {
+    const plantilla = readFileSync(join(base, '..', 'plantilla-edificio', archivo), 'utf8').replace(/^﻿/, '')
+    ok(indice[archivo].replace(/^﻿/, '').startsWith(plantilla), `${archivo} lleva la cabecera de la plantilla, con \\r\\n`)
+  }
   ok(await cuenta(`select 1 from public.exportar_indice($1) where left(contenido, 1) = chr(65279) and right(contenido, 2) = e'\\r\\n'`, [edificio]) === 4,
     'los cuatro llevan la marca BOM, para Excel, y acaban en salto de línea')
   ok(lineas(indice['indice/documentos.csv']).length === 13, 'documentos.csv: cabecera y 12 documentos')

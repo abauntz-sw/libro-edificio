@@ -2,6 +2,7 @@
 // recibe las filas y lo que ya hay en el edificio, y dice qué se cargaría y qué está mal.
 
 import type { Fila } from './csv.ts'
+import { AVISO_PREPARADO } from './listado.ts'
 import { idDocumento } from './uuid.ts'
 
 export interface Instalacion { id: string; nombre: string; tipo_id: string }
@@ -99,6 +100,12 @@ export function comprobarListado(filas: Fila[], catalogo: Catalogo): Comprobacio
     const incluir = normalizar(datos.incluir ?? '').replace('í', 'i')
     if (incluir === '' || incluir === 'no') { resultado.noIncluidas++; return }
     if (incluir !== 'si') { error(`incluir debe ser «si» o «no», y pone «${datos.incluir}»`); return }
+
+    // El PDF de una tanda con hojas separadoras, o un .docx, ya preparados: hay que cargar lo que salió de ellos.
+    if ((datos.aviso ?? '').includes(AVISO_PREPARADO)) {
+      error('este archivo ya pasó por preparar: carga los PDF que salieron de él (lo dice la columna aviso), no este')
+      return
+    }
 
     const sha256 = normalizar(datos.sha256 ?? '')
     if (!/^[a-f0-9]{64}$/.test(sha256)) { error('la columna sha256 no tiene una huella válida'); return }

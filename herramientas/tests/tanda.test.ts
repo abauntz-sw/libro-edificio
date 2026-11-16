@@ -7,6 +7,7 @@ import { PDFDocument } from 'pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { huella } from '../src/archivos.ts'
+import { leerCsv } from '../src/csv.ts'
 import { hayOcr, libreOffice } from '../src/externos.ts'
 import { carpetaDeSalida, carpetaDeTanda, nombresDeSalida, prepararTanda, REPOSITORIO_APP } from '../src/tanda.ts'
 import { pdfFicticio } from './ayuda.ts'
@@ -67,11 +68,25 @@ test('un escaneo con 3 documentos y 2 separadoras queda en 3 PDF, y el original 
 
   const { creados } = await prepararTanda([original], salida, false)
 
-  expect(await readdir(salida)).toEqual(['tanda-01.pdf', 'tanda-02.pdf', 'tanda-03.pdf'])
+  expect(await readdir(salida)).toEqual(['.preparados.csv', 'tanda-01.pdf', 'tanda-02.pdf', 'tanda-03.pdf'])
   expect(creados).toHaveLength(3)
   const paginas = await Promise.all(creados.map(async c => (await PDFDocument.load(await readFile(c))).getPageCount()))
   expect(paginas).toEqual([1, 2, 1])
   expect(await huella(original)).toBe(antes)
+
+  // Deja apuntado el original, con su huella, para que `escanear` lo reconozca después.
+  const lista = leerCsv(await readFile(join(salida, '.preparados.csv'), 'utf8')).filas
+  expect(lista).toEqual([{ original, sha256: antes, pdf: 'tanda-01.pdf, tanda-02.pdf, tanda-03.pdf' }])
+})
+
+test('una segunda tanda en la misma carpeta se suma a la lista de preparados', async () => {
+  const salida = join(carpeta, 'Escaneos 2026-11')
+  for (const nombre of ['uno.pdf', 'dos.pdf']) {
+    await writeFile(join(carpeta, nombre), await comoEscaneo(await pdfFicticio([nombre])))
+    await prepararTanda([join(carpeta, nombre)], salida, false)
+  }
+  const lista = leerCsv(await readFile(join(salida, '.preparados.csv'), 'utf8')).filas
+  expect(lista.map(f => f.pdf)).toEqual(['uno.pdf', 'dos.pdf'])
 })
 
 test.skipIf(!conOcr)('con OCR, los 3 PDF tienen texto que se puede buscar', async () => {
@@ -125,7 +140,7 @@ test('un escaneo de un solo documento, sin hojas separadoras, sí se prepara', a
   const { creados, sinTocar } = await prepararTanda([original], salida, false)
 
   expect(sinTocar).toEqual([])
-  expect(await readdir(salida)).toEqual(['acta.pdf'])
+  expect(await readdir(salida)).toEqual(['.preparados.csv', 'acta.pdf'])
   expect(creados).toHaveLength(1)
 })
 
@@ -165,7 +180,7 @@ test('dos escaneos con el mismo nombre en carpetas distintas no chocan', async (
 
   const { creados } = await prepararTanda([join(carpeta, 'entrada')], salida, false)
 
-  expect((await readdir(salida)).sort()).toEqual(['Caja 1 - scan0001.pdf', 'Caja 2 - scan0001.pdf'])
+  expect((await readdir(salida)).sort()).toEqual(['.preparados.csv', 'Caja 1 - scan0001.pdf', 'Caja 2 - scan0001.pdf'])
   expect(creados).toHaveLength(2)
 })
 

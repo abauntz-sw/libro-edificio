@@ -112,6 +112,8 @@ En el panel de Supabase: **Edge Functions → Secrets**.
 - `GITHUB_APP_ID`: el App ID.
 - `GITHUB_APP_PRIVATE_KEY`: todo el contenido del archivo `.pem`, con sus líneas de «BEGIN» y «END».
 
+Si los pones con la herramienta `supabase secrets set` en vez del panel, la clave de varias líneas puede quedarse solo con la primera. La función avisa con «La clave privada de la GitHub App está vacía o no es un PEM». Pásala en una sola línea, con los saltos escritos como `\n`, con `--env-file`. La función los entiende.
+
 Después borra el `.pem` del ordenador. Si se pierde, se crea otra clave en la App y se borra la anterior.
 
 ### 4. Publicar la función

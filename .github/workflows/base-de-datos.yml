@@ -43,3 +43,17 @@ jobs:
             echo "::error title=Seed no cargado::Hay $n partes y se esperaban 20"
             exit 1
           fi
+      # Con los roles de verdad de Supabase: lo que cree una migración futura nace cerrado para anon.
+      # Crea una tabla y una función como postgres, que es quien aplica las migraciones. Este Postgres se tira al acabar.
+      - name: Comprueba que lo nuevo nace cerrado para la clave pública
+        run: |
+          r=$(psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -tAc "
+            create table public.prueba_nueva (id int);
+            create function public.prueba_funcion() returns int language sql as 'select 1';
+            select has_table_privilege('anon', 'public.prueba_nueva', 'select, insert, update, delete')
+                or has_function_privilege('anon', 'public.prueba_funcion()', 'execute');")
+          echo "¿anon puede usarlas?: $r"
+          if [ "$r" != "f" ]; then
+            echo "::error title=Permisos por defecto::Una tabla o función nueva queda abierta para anon"
+            exit 1
+          fi

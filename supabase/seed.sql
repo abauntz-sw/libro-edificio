@@ -1,5 +1,7 @@
 -- Datos de ejemplo: un albergue inventado. Se puede cargar y borrar sin riesgo.
 -- Los identificadores son fijos para que la carga dé siempre el mismo resultado.
+-- Son valores inventados: no salen de la fórmula de importar (UUID v5 del edificio y la huella).
+-- Un documento cargado con importar tendrá otro identificador, y no pasa nada.
 -- Nunca añadas aquí datos reales: este archivo está en el repositorio público.
 --
 -- Las fechas cuentan desde el día de carga (current_date), así el ejemplo no envejece:

@@ -69,3 +69,9 @@ input {
 .btn.prim { background: var(--pino); border-color: var(--pino); color: var(--pino-fg); }
 .btn.grande { font-size: 18px; padding: 14px 18px; width: 100%; }
 .btn:disabled { opacity: .6; cursor: default; }
+
+/* Informe de huecos: una tarjeta por instalación con lo que le falta */
+.huecos { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.huecos > li { background: var(--sup); border: 1px solid var(--linea); border-left: 4px solid var(--crit); border-radius: 4px; padding: 12px 16px; }
+.huecos h2 { font: 600 22px/1.2 var(--display); margin: 0 0 4px; }
+.huecos ul { margin: 0; padding-left: 20px; }

@@ -225,6 +225,11 @@ await como('calor', async () => {
   ok(await cuenta('select 1 from public.documentos where id = $1', [d1]) === 1, 'empresa archiva en su instalación')
   await archivar(d1, [calefaccion])
   ok(await cuenta('select 1 from public.documento_instalaciones where documento_id = $1', [d1]) === 1, 'repetir no duplica los enlaces')
+  // El mismo identificador con otra huella es otro archivo: no se da por bueno.
+  ok(await falla(() => filas(`select public.registrar_documento(
+    $1, 'certificado', 'Otra', '2026-11-06', 'Emisor', $2, 'b.pdf', repeat('b', 64), $3::uuid[])`,
+    [d1, `documentos/2026/${d1}.pdf`, [calefaccion]])), 'un identificador repetido con otra huella no vale')
+  ok((await filas('select titulo from public.documentos where id = $1', [d1]))[0].titulo === 'Prueba', 'la ficha de antes no cambia')
   ok(await falla(() => archivar('99999999-9999-4999-8999-999999999992', [extintores])), 'empresa no archiva en otra instalación')
 })
 await como('calor', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999993', [])), 'empresa no archiva sin instalación'))

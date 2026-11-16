@@ -1,5 +1,5 @@
 // importar: carga en el Libro los documentos marcados con «si» en el listado.
-// Uso: npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--origen <carpeta>] [--simular]
+// Uso: npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--simular]
 // Primero comprueba toda la hoja. Si hay un solo error, no escribe nada.
 // No deja copias en el equipo: sube los archivos desde una carpeta temporal que se borra al terminar.
 
@@ -15,7 +15,7 @@ import { COLUMNAS } from './listado.ts'
 import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, ultimoCommit } from './repositorio.ts'
 import { cargarCatalogo, conectar, iniciarSesion, registrar } from './supabase.ts'
 
-const USO = 'Uso: npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--origen <carpeta>] [--simular]'
+const USO = 'Uso: npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--simular]'
 
 /** Lee un dato de la configuración (archivo .env) y avisa si falta. */
 function configuracion(nombre: string): string {
@@ -38,15 +38,14 @@ async function principal(): Promise<void> {
     options: {
       listado: { type: 'string' },
       repo: { type: 'string' },
-      origen: { type: 'string' },
       simular: { type: 'boolean', default: false },
     },
   })
   const { listado, repo, simular } = values
   if (!listado || (!repo && !simular)) throw new Error(USO)
   if (!existsSync(listado)) throw new Error(`No existe el listado: ${listado}`)
-  // Las rutas del listado cuentan desde la carpeta que se escaneó. Si no se dice otra, la del propio listado.
-  const origen = resolve(values.origen ?? dirname(listado))
+  // `escanear` guarda rutas completas. Una relativa, como en el listado de ejemplo, cuenta desde la carpeta del listado.
+  const origen = resolve(dirname(listado))
 
   const { columnas, filas } = leerCsv(await readFile(listado, 'utf8'))
   const faltan = COLUMNAS.filter(col => !columnas.includes(col))

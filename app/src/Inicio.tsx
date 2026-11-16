@@ -11,7 +11,7 @@ type Carga =
   | { paso: 'sin-acceso' }
   | { paso: 'error'; mensaje: string }
 
-/** Lo que se ve tras iniciar sesión: el nombre del edificio, el informe de huecos la subida de documentos y los partes. */
+/** Lo que se ve tras iniciar sesión: el nombre del edificio, el informe de huecos, la subida de documentos y los partes. */
 export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId: string }) {
   const [carga, setCarga] = useState<Carga>({ paso: 'cargando' })
   const [intento, setIntento] = useState(0)

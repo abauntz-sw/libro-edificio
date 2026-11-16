@@ -124,10 +124,13 @@ export function Subir({ supabase, esEmpresa, volver }: { supabase: SupabaseClien
           )}
 
           <div className="fila">
-            <button className="btn prim" onClick={guardar} disabled={guardando || pendientes.length === 0}>
-              {guardando ? 'Guardando…' : pendientes.length === 1 ? 'Guardar 1 documento' : `Guardar ${pendientes.length} documentos`}
-            </button>
-            {!guardando && pendientes.length === 0 && <button className="btn" onClick={() => setFilas([])}>Subir más</button>}
+            {/* Cuando ya no queda nada por guardar, el botón sobra: solo queda empezar otra tanda. */}
+            {(guardando || pendientes.length > 0) && (
+              <button className="btn prim" onClick={guardar} disabled={guardando}>
+                {guardando ? 'Guardando…' : pendientes.length === 1 ? 'Guardar 1 documento' : `Guardar ${pendientes.length} documentos`}
+              </button>
+            )}
+            {!guardando && pendientes.length === 0 && <button className="btn prim" onClick={() => setFilas([])}>Subir más</button>}
           </div>
         </section>
       )}

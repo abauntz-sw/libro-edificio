@@ -28,7 +28,7 @@ export interface Fila {
   rechazo?: string
   /** Si ya está en el Libro, o en esta misma tanda. */
   duplicado?: string
-  estado: 'preparando' | 'lista' | 'subiendo' | 'hecha' | 'error'
+  estado: 'lista' | 'subiendo' | 'hecha' | 'error'
   mensaje?: string
 }
 

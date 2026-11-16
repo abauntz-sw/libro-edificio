@@ -2,7 +2,10 @@
 
 Programas pequeños que se ejecutan en Supabase, no en el navegador. Sirven para guardar ahí las claves que el navegador no debe ver.
 
-De momento hay una: `archivos`.
+Hay dos:
+
+- `archivos`: sube y descarga los documentos.
+- `exportar`: cada noche deja el índice de cada edificio en su repositorio. Está explicada al final, en [«Qué hace `exportar`»](#qué-hace-exportar).
 
 ## Qué hace `archivos`
 
@@ -141,7 +144,7 @@ curl "https://<referencia>.supabase.co/functions/v1/archivos?id=<el-mismo-uuid>"
 
 ## Tests
 
-Las funciones se ejecutan con [Deno](https://deno.com), así que los tests también. Desde `supabase/functions/archivos/`:
+Las funciones se ejecutan con [Deno](https://deno.com), así que los tests también. Desde la carpeta de cada función, `supabase/functions/archivos/` o `supabase/functions/exportar/`:
 
 ```bash
 deno task tipos
@@ -160,10 +163,91 @@ Que una empresa no vea un documento ajeno lo decide la base de datos. Eso se com
 | `archivos/peticion.ts` | Atiende cada petición: los pasos de subir y de descargar |
 | `archivos/ficha.ts` | Comprueba el archivo y la ficha |
 | `archivos/libro.ts` | Lo que pregunta a la base de datos, con la sesión de la persona |
-| `archivos/github.ts` | Lee y escribe en el repositorio como GitHub App |
+| `archivos/github.ts` | Lee y escribe en el repositorio como GitHub App. También lo usa `exportar` |
+| `exportar/index.ts` | La entrada de `exportar`. Lee los secretos y junta las piezas |
+| `exportar/exportar.ts` | Comprueba la clave y exporta cada edificio |
 
 ## Límites
 
 - **Solo PDF.** El archivo guarda los documentos en PDF. Las fotos y las firmas de los partes llegarán con la tarea 1.6.
 - **25 MB por archivo.** Lo mayor va por la herramienta de carga local.
 - **Escrituras de una en una.** GitHub no admite dos a la vez en el mismo repositorio. La función las pone en cola y, si aun así GitHub responde con conflicto, espera y repite hasta cinco veces.
+
+## Qué hace `exportar`
+
+Cada noche deja en la carpeta `indice/` del repositorio de cada edificio cuatro CSV: documentos, instalaciones, revisiones y partes. Con ellos se puede leer el archivo sin la aplicación.
+
+1. Pide los CSV a la base de datos, con `exportar_indice`. El formato está explicado en el README de la plantilla del edificio.
+2. Los compara con los que hay en el repositorio.
+3. Si alguno ha cambiado, los guarda todos en **un solo commit**, «Actualiza el índice (AAAA-MM-DD)». Si ninguno ha cambiado, no hace commit. Así el historial solo crece cuando hay algo nuevo.
+
+Si un edificio falla, sigue con los demás. Al final responde con error, y en el registro de la función queda cuál ha fallado y por qué.
+
+**Quién puede lanzarla.** Solo quien trae la clave secreta de Supabase en la cabecera `apikey`. Es lo que hace la tarea programada. La función la compara en su código, por eso lleva `verify_jwt = false` en `config.toml`, igual que `archivos`.
+
+### Ponerla en marcha
+
+Hace falta la GitHub App de `archivos`, con sus secretos. `exportar` usa los mismos.
+
+**1. Publicarla.** Desde la raíz del repositorio:
+
+```bash
+npx supabase functions deploy exportar --project-ref <referencia-del-proyecto>
+```
+
+**2. Las extensiones.** En el panel: **Database → Extensions**. Activa `pg_cron`, que lanza tareas a una hora, y `pg_net`, que deja a la base de datos hacer peticiones a una dirección.
+
+**3. Guardar la dirección y la clave en Vault.** Vault es la caja fuerte de Supabase: guarda los secretos cifrados dentro de la base de datos. En **SQL Editor**:
+
+```sql
+select vault.create_secret('https://<referencia>.supabase.co', 'url_proyecto');
+select vault.create_secret('<la clave secreta, sb_secret_…>', 'clave_secreta');
+```
+
+La clave secreta está en **Project Settings → API Keys**. No la escribas en ningún archivo del repositorio.
+
+**4. La tarea de cada noche.** También en **SQL Editor**. Se lanza a las 2:00 en hora universal: las 3:00 en invierno en España y las 4:00 en verano.
+
+```sql
+select cron.schedule('exportar-indice', '0 2 * * *', $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'url_proyecto') || '/functions/v1/exportar',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'apikey', (select decrypted_secret from vault.decrypted_secrets where name = 'clave_secreta')
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+$$);
+```
+
+**5. Probarla sin esperar a la noche.** En **SQL Editor**, lanza lo mismo que la tarea:
+
+```sql
+select net.http_post(
+  url := (select decrypted_secret from vault.decrypted_secrets where name = 'url_proyecto') || '/functions/v1/exportar',
+  headers := jsonb_build_object('apikey', (select decrypted_secret from vault.decrypted_secrets where name = 'clave_secreta')),
+  body := '{}'::jsonb,
+  timeout_milliseconds := 60000
+);
+```
+
+Al cabo de unos segundos, la respuesta está en `net._http_response`:
+
+```sql
+select status_code, content from net._http_response order by created desc limit 1;
+```
+
+Tiene que salir `200`, y en el repositorio del edificio, un commit «Actualiza el índice». Si lo lanzas otra vez sin cambios en el Libro, sale `200` con `"commit": null`, y no hay commit nuevo.
+
+### Cómo saber si funciona cada noche
+
+- **En GitHub:** el historial del repositorio del edificio tiene un commit «Actualiza el índice» los días que hubo cambios.
+- **En Supabase:** las últimas ejecuciones de la tarea, con su resultado:
+
+  ```sql
+  select start_time, status, return_message from cron.job_run_details order by start_time desc limit 7;
+  ```
+
+- **En la oficina:** la copia tiene su propia comprobación. Está en la carpeta `copia/` del repositorio del edificio.

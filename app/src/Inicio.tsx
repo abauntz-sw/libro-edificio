@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import { type Acceso, leerAcceso, NOMBRE_PERFIL } from './acceso.ts'
 import { Huecos } from './Huecos.tsx'
+import { Parte } from './Parte.tsx'
 import { Subir } from './Subir.tsx'
 
 type Carga =
@@ -10,11 +11,11 @@ type Carga =
   | { paso: 'sin-acceso' }
   | { paso: 'error'; mensaje: string }
 
-/** Lo que se ve tras iniciar sesión: el nombre del edificio, el informe de huecos y la subida de documentos. */
+/** Lo que se ve tras iniciar sesión: el nombre del edificio, el informe de huecos la subida de documentos y los partes. */
 export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId: string }) {
   const [carga, setCarga] = useState<Carga>({ paso: 'cargando' })
   const [intento, setIntento] = useState(0)
-  const [pantalla, setPantalla] = useState<'inicio' | 'huecos' | 'subir'>('inicio')
+  const [pantalla, setPantalla] = useState<'inicio' | 'huecos' | 'subir' | 'parte'>('inicio')
 
   useEffect(() => {
     // Si la persona sale antes de que llegue la respuesta, la respuesta se descarta.
@@ -61,7 +62,11 @@ export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId:
             <p>Has entrado en el Libro de <b>{carga.acceso.edificio}</b>.</p>
             <p className="suave">La aplicación está en construcción. Pronto verás aquí los documentos y las revisiones.</p>
             <div className="fila">
-              <button className="btn prim" onClick={() => setPantalla('huecos')}>Ver qué documentos faltan</button>
+              {/* La consulta solo mira: no registra partes. */}
+              {carga.acceso.perfil !== 'consulta' && (
+                <button className="btn prim" onClick={() => setPantalla('parte')}>Registrar parte</button>
+              )}
+              <button className="btn" onClick={() => setPantalla('huecos')}>Ver qué documentos faltan</button>
               {/* Solo la administración y las empresas pueden archivar. La base de datos lo comprueba igualmente. */}
               {puedeSubir(carga.acceso) && <button className="btn" onClick={() => setPantalla('subir')}>Subir documentos</button>}
             </div>
@@ -70,6 +75,10 @@ export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId:
 
         {carga.paso === 'listo' && pantalla === 'huecos' && (
           <Huecos supabase={supabase} volver={() => setPantalla('inicio')} />
+        )}
+
+        {carga.paso === 'listo' && pantalla === 'parte' && (
+          <Parte supabase={supabase} acceso={carga.acceso} volver={() => setPantalla('inicio')} />
         )}
 
         {carga.paso === 'listo' && pantalla === 'subir' && (

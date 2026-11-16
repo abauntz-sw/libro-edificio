@@ -1,13 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { type Acceso, leerAcceso, NOMBRE_PERFIL } from './acceso.ts'
+import { almacenIndexedDB, Cola, pedirAlmacenPersistente, type Recuento } from './cola.ts'
 import { Huecos } from './Huecos.tsx'
 import { Parte } from './Parte.tsx'
+import { enviarParte } from './parte.ts'
+import { Pendientes } from './Pendientes.tsx'
+import { CLAVE, conRecuerdo } from './recuerdo.ts'
 import { Subir } from './Subir.tsx'
 
 type Carga =
   | { paso: 'cargando' }
-  | { paso: 'listo'; acceso: Acceso }
+  /** `deMemoria`: sin conexión, con los datos de la última vez. */
+  | { paso: 'listo'; acceso: Acceso; deMemoria: boolean }
   | { paso: 'sin-acceso' }
   | { paso: 'error'; mensaje: string }
 
@@ -16,12 +21,35 @@ export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId:
   const [carga, setCarga] = useState<Carga>({ paso: 'cargando' })
   const [intento, setIntento] = useState(0)
   const [pantalla, setPantalla] = useState<'inicio' | 'huecos' | 'subir' | 'parte'>('inicio')
+  // La cola de partes de este móvil. Ver cola.ts.
+  const cola = useMemo(() => new Cola(almacenIndexedDB(), fila => enviarParte(supabase, fila)), [supabase])
+  const [recuento, setRecuento] = useState<Recuento>({ pendientes: 0, rechazados: [] })
+
+  useEffect(() => {
+    let vigente = true
+    const contar = () => { cola.recuento(authId).then(r => vigente && setRecuento(r), () => {}) }
+    const dejar = cola.escuchar(contar)
+    // Se reintenta al abrir, al volver la conexión y al volver a la aplicación. No se depende de que
+    // el navegador envíe en segundo plano, porque Safari no lo hace.
+    const reintentar = () => { if (document.visibilityState === 'visible') cola.reintentar(authId) }
+    reintentar()
+    contar()
+    window.addEventListener('online', reintentar)
+    document.addEventListener('visibilitychange', reintentar)
+    pedirAlmacenPersistente()
+    return () => {
+      vigente = false
+      dejar()
+      window.removeEventListener('online', reintentar)
+      document.removeEventListener('visibilitychange', reintentar)
+    }
+  }, [cola, authId])
 
   useEffect(() => {
     // Si la persona sale antes de que llegue la respuesta, la respuesta se descarta.
     let vigente = true
-    leerAcceso(supabase, authId).then(
-      acceso => vigente && setCarga(acceso ? { paso: 'listo', acceso } : { paso: 'sin-acceso' }),
+    conRecuerdo(CLAVE.acceso(authId), () => leerAcceso(supabase, authId)).then(
+      ({ datos: acceso, deMemoria }) => vigente && setCarga(acceso ? { paso: 'listo', acceso, deMemoria } : { paso: 'sin-acceso' }),
       (error: Error) => vigente && setCarga({
         paso: 'error',
         mensaje: navigator.onLine ? error.message : 'No hay conexión. Cuando vuelva, pulsa Reintentar.',
@@ -37,6 +65,13 @@ export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId:
 
   const acceso = carga.paso === 'listo' ? carga.acceso : null
 
+  function salir() {
+    // Los partes sin enviar no se borran al salir: se enviarán cuando esta persona vuelva a entrar aquí.
+    const quedan = recuento.pendientes + recuento.rechazados.length
+    if (quedan > 0 && !confirm(`Tienes ${quedan === 1 ? 'un parte' : `${quedan} partes`} sin enviar en este móvil. Se enviarán cuando vuelvas a entrar. ¿Salir igualmente?`)) return
+    supabase.auth.signOut({ scope: 'local' })
+  }
+
   return (
     <>
       <header>
@@ -48,13 +83,18 @@ export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId:
           <div className="fila peq suave">
             {acceso && <span>{acceso.persona} · {NOMBRE_PERFIL[acceso.perfil]}</span>}
             {/* scope 'local': cierra la sesión solo en este aparato. */}
-            <button className="btn" onClick={() => supabase.auth.signOut({ scope: 'local' })}>Salir</button>
+            <button className="btn" onClick={salir}>Salir</button>
           </div>
         </div>
       </header>
 
       <main className="ancho gutter pila">
         {carga.paso === 'cargando' && <p className="suave">Cargando el edificio…</p>}
+
+        {carga.paso === 'listo' && carga.deMemoria && (
+          <p className="sin-red" role="status">Sin conexión. Ves los datos de la última vez que hubo red.</p>
+        )}
+        {carga.paso === 'listo' && <Pendientes cola={cola} authId={authId} recuento={recuento} />}
 
         {carga.paso === 'listo' && pantalla === 'inicio' && (
           <>
@@ -78,7 +118,7 @@ export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId:
         )}
 
         {carga.paso === 'listo' && pantalla === 'parte' && (
-          <Parte supabase={supabase} acceso={carga.acceso} volver={() => setPantalla('inicio')} />
+          <Parte supabase={supabase} authId={authId} acceso={carga.acceso} cola={cola} volver={() => setPantalla('inicio')} />
         )}
 
         {carga.paso === 'listo' && pantalla === 'subir' && (

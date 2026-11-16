@@ -4,7 +4,7 @@
 
 import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { escribirCsv, leerCsv } from './csv.ts'
 import { COLUMNAS, combinar, escanear } from './listado.ts'
@@ -52,7 +52,10 @@ async function principal(): Promise<void> {
   const duplicados = filas.filter(f => f.duplicado_de !== '').length
   const conAviso = filas.filter(f => f.aviso !== '').length
   console.log(`${salida}: ${filas.length} archivos (${nuevas} nuevos, ${duplicados} duplicados, ${conAviso} con aviso)`)
-  for (const { de, a } of movidas) console.log(`Movido o renombrado, se conserva su fila: ${de} → ${a}`)
+  // Las de un listado antiguo, con rutas relativas, no se han movido: solo pasan a ruta completa.
+  const aCompleta = movidas.filter(m => !isAbsolute(m.de))
+  if (aCompleta.length > 0) console.log(`${aCompleta.length} filas de un listado antiguo pasan de ruta relativa a ruta completa.`)
+  for (const { de, a } of movidas.filter(m => isAbsolute(m.de))) console.log(`Movido o renombrado, se conserva su fila: ${de} → ${a}`)
   for (const ruta of cambiadas) console.log(`Aviso: ha cambiado desde el escaneo anterior, revisa su ficha: ${ruta}`)
   if (preparados > 0) console.log(`Aviso: ${preparados} archivos ya pasaron por preparar. Carga los PDF que salieron, no estos: lo dice su columna aviso.`)
   for (const ruta of desaparecidas) {

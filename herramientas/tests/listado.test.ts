@@ -130,6 +130,16 @@ test('reconoce por la huella un archivo movido o renombrado, y conserva lo relle
   })
 })
 
+test('si el primero de unos duplicados se mueve, sus copias le siguen', async () => {
+  const original = await crear('a/original.pdf', 'igual')
+  await crear('b/copia.pdf', 'igual')
+  const primera = combinar([], await escanear([carpeta])).filas
+  await rm(original)
+  const movido = await crear('c/movido.pdf', 'igual')
+  const { filas } = combinar(primera, await escanear([carpeta]))
+  expect(filas.map(f => f.duplicado_de)).toEqual(['', movido])
+})
+
 test('dos copias que desaparecen y una que aparece: se mueve una fila y la otra se da por desaparecida', async () => {
   const a = await crear('a.pdf', 'igual')
   const b = await crear('b.pdf', 'igual')

@@ -144,5 +144,11 @@ export function combinar(anteriores: Fila[], escaneadas: Fila[], plataforma = pr
   }
 
   resultado.desaparecidas = [...faltanPorHuella.values()].flat().map(f => f.ruta_original)
+  // Un duplicado apunta al primero por su ruta: si ese ha cambiado de sitio, se le sigue.
+  const nuevaRuta = new Map(resultado.movidas.map(m => [clave(m.de), m.a]))
+  for (const fila of filas) {
+    const a = fila.duplicado_de ? nuevaRuta.get(clave(fila.duplicado_de)) : undefined
+    if (a) fila.duplicado_de = a
+  }
   return resultado
 }

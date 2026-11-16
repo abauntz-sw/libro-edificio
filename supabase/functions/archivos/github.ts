@@ -8,6 +8,13 @@
 
 import { ErrorHttp } from './ficha.ts'
 
+/** Un fallo de GitHub, con su código de respuesta, para decidir si vale la pena repetir. */
+export class ErrorGitHub extends Error {
+  constructor(readonly estado: number, mensaje: string) {
+    super(mensaje)
+  }
+}
+
 export interface Escritura {
   /** El commit que ha creado el archivo. */
   commit: string | null
@@ -20,6 +27,22 @@ export interface Almacen {
   escribir(repositorio: string, ruta: string, bytes: Uint8Array<ArrayBuffer>, mensaje: string): Promise<Escritura>
   /** Devuelve el contenido del archivo, o null si no está. */
   leer(repositorio: string, ruta: string): Promise<ReadableStream<Uint8Array> | null>
+}
+
+export interface Cambio {
+  /** El commit nuevo, o null si todos los archivos ya estaban iguales. */
+  commit: string | null
+  /** Las rutas que han cambiado. */
+  cambiados: string[]
+}
+
+/** Lo que usa la exportación diaria: dejar varios archivos a la vez. */
+export interface Repositorio {
+  /**
+   * Deja esos archivos en el repositorio, todos en un solo commit.
+   * Si ya estaban iguales, no hace commit: así el historial solo crece cuando algo cambia.
+   */
+  actualizar(repositorio: string, archivos: Map<string, Uint8Array>, mensaje: string): Promise<Cambio>
 }
 
 export interface OpcionesGitHub {
@@ -90,7 +113,7 @@ export async function huellaGit(bytes: Uint8Array): Promise<string> {
   return hex(await crypto.subtle.digest('SHA-1', todo))
 }
 
-export function crearGitHub(opciones: OpcionesGitHub): Almacen {
+export function crearGitHub(opciones: OpcionesGitHub): Almacen & Repositorio {
   const pedir = opciones.fetch ?? fetch
   const api = opciones.api ?? 'https://api.github.com'
   const esperar = opciones.esperar ?? ((ms: number) => new Promise<void>(listo => setTimeout(listo, ms)))
@@ -197,7 +220,78 @@ export function crearGitHub(opciones: OpcionesGitHub): Almacen {
     }
   }
 
+  /** Pide algo a GitHub y devuelve su respuesta en JSON. Si falla, dice qué se estaba haciendo. */
+  async function pedirJson(repositorio: string, que: string, camino: string, metodo = 'GET', cuerpo?: unknown) {
+    const respuesta = await pedir(`${api}/repos/${repositorio}${camino}`, {
+      method: metodo,
+      headers: { ...cabeceras(await token(repositorio)), 'Content-Type': 'application/json' },
+      body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+    })
+    if (!respuesta.ok) {
+      await respuesta.body?.cancel()
+      throw new ErrorGitHub(respuesta.status, `GitHub no deja ${que} (${respuesta.status})`)
+    }
+    return respuesta.json()
+  }
+
+  /**
+   * Un commit con varios archivos. Se hace por piezas, como Git por dentro:
+   *   1. Mira a qué commit apunta la rama y compara cada archivo con el que hay allí.
+   *   2. Sube cada archivo cambiado (un «blob»).
+   *   3. Monta la carpeta nueva (un «tree») sobre la de antes, cambiando solo esos archivos.
+   *   4. Crea el commit y mueve la rama hasta él.
+   * Si en medio otro ha movido la rama, el paso 4 falla y se empieza otra vez.
+   */
+  async function actualizarUnaVez(repositorio: string, archivos: Map<string, Uint8Array>, mensaje: string): Promise<Cambio> {
+    for (const ruta of archivos.keys()) direccion(repositorio, ruta)
+    const { default_branch: rama } = await pedirJson(repositorio, 'ver el repositorio', '')
+    const refRama = `/git/refs/heads/${encodeURIComponent(rama)}`
+
+    for (let intento = 1; ; intento++) {
+      const { object: { sha: anterior } } = await pedirJson(repositorio, 'ver la rama', `/git/ref/heads/${encodeURIComponent(rama)}`)
+      const { tree: { sha: carpeta } } = await pedirJson(repositorio, 'ver el último commit', `/git/commits/${anterior}`)
+
+      const cambiados: string[] = []
+      for (const [ruta, bytes] of archivos) {
+        const actual = await pedir(`${direccion(repositorio, ruta)}?ref=${anterior}`, {
+          headers: cabeceras(await token(repositorio), 'application/vnd.github.object+json'),
+        })
+        if (actual.status !== 404 && !actual.ok) throw new Error(`GitHub no deja mirar ${ruta} (${actual.status})`)
+        const sha = actual.ok ? (await actual.json()).sha : null
+        if (actual.status === 404) await actual.body?.cancel()
+        if (sha !== await huellaGit(bytes)) cambiados.push(ruta)
+      }
+      if (cambiados.length === 0) return { commit: null, cambiados }
+
+      const piezas = []
+      for (const ruta of cambiados) {
+        const blob = await pedirJson(repositorio, 'guardar un archivo', '/git/blobs', 'POST',
+          { content: base64(archivos.get(ruta)!), encoding: 'base64' })
+        piezas.push({ path: ruta, mode: '100644', type: 'blob', sha: blob.sha })
+      }
+      const nueva = await pedirJson(repositorio, 'montar la carpeta', '/git/trees', 'POST', { base_tree: carpeta, tree: piezas })
+      const commit = await pedirJson(repositorio, 'crear el commit', '/git/commits', 'POST',
+        { message: mensaje, tree: nueva.sha, parents: [anterior] })
+
+      try {
+        // force: false. Si la rama ya no está en «anterior», GitHub no la mueve y responde 422.
+        await pedirJson(repositorio, 'mover la rama', refRama, 'PATCH', { sha: commit.sha, force: false })
+        return { commit: commit.sha, cambiados }
+      } catch (error) {
+        const repetible = error instanceof ErrorGitHub && (error.estado === 409 || error.estado === 422 || error.estado >= 500)
+        if (!repetible || intento === INTENTOS) throw error
+        await esperar(300 * 2 ** (intento - 1) + Math.random() * 200)
+      }
+    }
+  }
+
   return {
+    actualizar(repositorio, archivos, mensaje) {
+      const turno = cola.then(() => actualizarUnaVez(repositorio, archivos, mensaje))
+      cola = turno.catch(() => {})
+      return turno
+    },
+
     escribir(repositorio, ruta, bytes, mensaje) {
       const turno = cola.then(() => escribirUnaVez(repositorio, ruta, bytes, mensaje))
       cola = turno.catch(() => {})

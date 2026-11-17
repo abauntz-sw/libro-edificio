@@ -2,7 +2,7 @@
 
 La web del Libro del Edificio. Es una PWA: se abre en el navegador y también se puede instalar en el móvil como una app.
 
-De momento es un esqueleto. Deja entrar con el correo, muestra el nombre del edificio y el informe de huecos, y deja subir documentos.
+De momento es un esqueleto. Deja entrar con el correo, muestra el nombre del edificio y el informe de huecos, deja subir documentos y registrar partes.
 
 ## Subir documentos
 
@@ -24,6 +24,25 @@ El aviso de duplicados solo encuentra lo que la persona puede ver: una empresa n
 Dice qué documentos faltan en cada instalación y deja descargarlo en CSV. Sale de la vista `huecos` de la base de datos: lo que la plantilla pide para cada tipo de instalación y la instalación no tiene. Un documento en la papelera no cuenta.
 
 La vista respeta los permisos: una empresa solo ve los huecos de su instalación. El CSV tiene el mismo formato que el índice del repositorio del edificio, para que Excel lo abra bien. Se crea en el navegador, sin pasar por ningún servidor.
+
+## Registrar parte
+
+Para anotar una intervención desde el móvil en menos de un minuto. Lo ven la administración, la guarda y las empresas. La consulta no.
+
+1. **¿Dónde?** Las instalaciones que la persona ve, menos las que no aplican. Una empresa solo ve la suya.
+2. **¿Corresponde a una revisión prevista?** Solo salen las revisiones que esa persona tiene a su cargo; la administración ve todas.
+   - Si la revisión tiene periodicidad, la pantalla dice a qué fecha pasará la próxima. La calcula la base de datos al guardar el parte.
+   - Si no la tiene, pide la próxima fecha, que tiene que ser posterior a hoy.
+3. **¿Qué has hecho?** Solo los tipos de ese perfil: la guarda, comprobación o incidencia; las empresas, preventivo, reparación, inspección o urgencia.
+4. **Una frase** y **Enviar parte**.
+
+El parte se guarda en la tabla `partes`, con la fecha de hoy del aparato. La base de datos pone el edificio, el autor y la empresa, y vuelve a comprobar que ese perfil pueda registrarlo.
+
+El identificador del parte se crea en el móvil al empezarlo. Si el envío falla y se repite, la base de datos ve que ya lo tiene y no lo duplica.
+
+Un parte no se cambia ni se borra. Una corrección es un parte nuevo.
+
+Todavía no lleva fotos ni certificado: llegarán en un paso siguiente, porque la función `archivos` solo acepta PDF. Tampoco funciona sin cobertura: es la tarea 1.7.
 
 ## Cómo se arranca
 

@@ -4,9 +4,10 @@
 
 import { existsSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { escribirCsv, leerCsv } from './csv.ts'
+import { destinoEnElLibro, estaEnElLibro } from './en-el-libro.ts'
 import { COLUMNAS, combinar, escanear } from './listado.ts'
 import { buscarPreparados, marcarPreparados } from './preparados.ts'
 import { avisoUnidadDeRed, unidadesDeRed } from './red.ts'
@@ -44,14 +45,32 @@ async function principal(): Promise<void> {
     columnas = leido.columnas   // respeta columnas añadidas a mano
   }
 
+  // Lo que `importar` apartó a `[en-el-libro]` ya está cargado. `escanear` no entra en esas carpetas,
+  // así que esas filas no se dan por desaparecidas. Si `importar` no pudo poner al día el listado
+  // (por ejemplo, porque estaba abierto en Excel), aquí se corrige su ruta.
+  const carpetaListado = dirname(resolve(salida))
+  const cargadas = new Set<string>()
+  let recolocadas = 0
+  for (const fila of anteriores) {
+    const ruta = resolve(carpetaListado, fila.ruta_original)
+    if (estaEnElLibro(ruta)) {
+      if (existsSync(ruta)) cargadas.add(fila.ruta_original)
+    } else if (!existsSync(ruta) && existsSync(destinoEnElLibro(ruta))) {
+      fila.ruta_original = destinoEnElLibro(ruta)
+      cargadas.add(fila.ruta_original)
+      recolocadas++
+    }
+  }
+
   const escaneadas = await escanear(rutas, [salida])
-  const { filas, nuevas, desaparecidas, movidas, cambiadas } = combinar(anteriores, escaneadas)
+  const { filas, nuevas, desaparecidas, movidas, cambiadas } = combinar(anteriores, escaneadas, process.platform, cargadas)
   const preparados = marcarPreparados(filas, await buscarPreparados(rutas))
   await writeFile(salida, escribirCsv(columnas, filas), 'utf8')
 
   const duplicados = filas.filter(f => f.duplicado_de !== '').length
   const conAviso = filas.filter(f => f.aviso !== '').length
-  console.log(`${salida}: ${filas.length} archivos (${nuevas} nuevos, ${duplicados} duplicados, ${conAviso} con aviso)`)
+  console.log(`${salida}: ${filas.length} archivos (${nuevas} nuevos, ${duplicados} duplicados, ${conAviso} con aviso, ${cargadas.size} ya en el Libro)`)
+  if (recolocadas > 0) console.log(`${recolocadas} filas apuntan ahora a su archivo en [en-el-libro].`)
   // Las de un listado antiguo, con rutas relativas, no se han movido: solo pasan a ruta completa.
   const aCompleta = movidas.filter(m => !isAbsolute(m.de))
   if (aCompleta.length > 0) console.log(`${aCompleta.length} filas de un listado antiguo pasan de ruta relativa a ruta completa.`)

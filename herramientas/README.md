@@ -146,6 +146,7 @@ Qué hace:
 - Avisa en `aviso` de lo que no es PDF y de lo que pasa de 100 MB, que GitHub no admite.
 - Avisa en `aviso` de los originales que ya pasaron por `preparar`: hay que cargar los PDF que salieron de ellos. `importar` no los carga.
 - Si el listado ya existe, conserva lo rellenado y añade solo los archivos nuevos.
+- No entra en las carpetas `[en-el-libro]`: lo de dentro ya está en el Libro. Sus filas cuentan como cargadas, no como desaparecidas.
 - No cambia ni mueve ningún archivo.
 
 ### Rutas completas: cada escaneo se suma a la hoja
@@ -190,12 +191,13 @@ Escribe estas rutas en PowerShell. En Git Bash las barras `\\` del principio se 
 Carga en el Libro los documentos marcados con `si` en el listado.
 
 ```bash
-npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--simular]
+npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--no-mover] [--simular]
 ```
 
 - `--repo` es la dirección del repositorio privado del edificio en GitHub, por ejemplo `https://github.com/<organización>/<edificio>.git`. No hace falta tenerlo clonado. Tiene que ser el repositorio que el Libro tiene apuntado para ese edificio. Si es otro, o si el edificio no tiene ninguno apuntado, `importar` se para antes de escribir nada.
 - Cada archivo se busca en su `ruta_original`, que es la ruta completa. Una ruta relativa, como en el listado de ejemplo, cuenta desde la carpeta del listado.
-- `--simular` comprueba todo y no escribe nada. Con `--simular` no hace falta `--repo`.
+- `--no-mover` deja los originales donde están. Sin él, lo ya cargado se aparta a `[en-el-libro]` (ver abajo).
+- `--simular` comprueba todo y no escribe ni mueve nada. Con `--simular` no hace falta `--repo`.
 
 Ejemplo con los datos ficticios, sin escribir nada:
 
@@ -219,6 +221,24 @@ Copia `.env.ejemplo` como `.env` y rellénalo: la dirección del proyecto de Sup
 4. **Hace un único commit y lo sube.** Cada ficha guarda ese commit en `commit_sha`. La copia temporal no trae la historia y no sabe qué commit guardó cada archivo, así que se apunta el último, que los contiene todos.
 5. **Borra la copia temporal**, también si algo ha fallado.
 6. **Crea las fichas** en Supabase con `registrar_documento` y muestra un resumen: cargados, saltados y con error.
+7. **Aparta lo cargado a `[en-el-libro]`**, salvo con `--no-mover`. Ver el apartado siguiente.
+
+### Lo cargado se aparta a `[en-el-libro]`
+
+Al terminar, cada archivo que ya está en el repositorio **y** tiene su ficha se mueve a una subcarpeta `[en-el-libro]`, junto a donde estaba:
+
+```
+Mantenimiento\caldera.pdf  →  Mantenimiento\[en-el-libro]\caldera.pdf
+```
+
+Así, en la carpeta de los documentos se ve de un vistazo qué está en el Libro y qué falta. Desde la carga, la versión buena es la del Libro: una versión nueva se sube por la aplicación.
+
+- **Solo lo que ha salido bien:** lo recién cargado sin error y lo que ya estaba en el Libro. Lo que ha fallado se queda en su sitio.
+- **El archivo no cambia.** Solo cambia de carpeta y queda en solo lectura. Eso no lo protege de verdad, pero hace saltar un aviso a quien intente guardar encima.
+- **Si no se puede mover** (permisos, archivo abierto, ya hay otro con ese nombre), avisa y sigue: el documento ya está en el Libro.
+- **El listado se pone al día** con la ruta nueva. Si no se puede escribir, por ejemplo porque está abierto en Excel, avisa: la próxima vez que se ejecute `escanear`, encuentra el archivo en su `[en-el-libro]` y corrige la ruta.
+
+Está pendiente de confirmar con la FNDME (pregunta 14 de `PLAN-BELAGUA.md`). Si prefieren que su carpeta no se toque, se usa `--no-mover`.
 
 ### No deja copias en el equipo
 

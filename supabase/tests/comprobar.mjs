@@ -31,6 +31,7 @@ await db.exec(`
   grant execute on function auth.uid() to anon, authenticated, service_role;
   alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
   alter default privileges in schema public grant all on routines to anon, authenticated, service_role;
+  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 `)
 
 for (const f of readdirSync(join(base, 'migrations')).sort()) {
@@ -134,6 +135,27 @@ const abiertoAAnon = (await filas(`
   select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname in ('public', 'interno') and has_function_privilege('anon', p.oid, 'execute')`)).map(f => f.nombre)
 ok(abiertoAAnon.length === 0, `anon no tiene permiso sobre ninguna tabla ni función${abiertoAAnon.length ? `: ${abiertoAAnon.join(', ')}` : ''}`)
+// Lo que cree una migración futura nace cerrado, aunque olvide su `revoke`. Se crea y se deshace.
+await db.exec('begin')
+try {
+  await db.exec(`
+    create table public.prueba_nueva (id int);
+    create view public.prueba_vista as select 1 as x;
+    create sequence public.prueba_contador;
+    create function public.prueba_funcion() returns int language sql as 'select 1';
+    create function interno.prueba_interna() returns int language sql as 'select 1';`)
+  const [n] = await filas(`select
+    has_table_privilege('anon', 'public.prueba_nueva', 'select, insert, update, delete') as tabla,
+    has_table_privilege('anon', 'public.prueba_vista', 'select') as vista,
+    has_sequence_privilege('anon', 'public.prueba_contador', 'usage, select, update') as secuencia,
+    has_function_privilege('anon', 'public.prueba_funcion()', 'execute') as funcion,
+    has_function_privilege('anon', 'interno.prueba_interna()', 'execute') as interna`)
+  ok(!n.tabla && !n.vista, 'una tabla o vista nueva nace cerrada para anon')
+  ok(!n.secuencia, 'una secuencia nueva nace cerrada para anon')
+  ok(!n.funcion && !n.interna, 'una función nueva nace cerrada para anon, en public y en interno')
+} finally {
+  await db.exec('rollback')
+}
 await como('anon', async () => {
   for (const t of ['edificios', 'usuarios', 'documentos', 'partes', 'codigos_acceso', 'avisos']) {
     ok(await falla(() => filas(`select * from public.${t}`)), `anon no puede leer ${t}`)

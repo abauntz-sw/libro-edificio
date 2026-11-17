@@ -2,13 +2,15 @@
 // Los originales solo se leen.
 
 import { existsSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { listarArchivos } from './archivos.ts'
+import { huella, listarArchivos } from './archivos.ts'
 import { aPdf, hayOcr, libreOffice, ocr } from './externos.ts'
 import { analizar, partir, yaEstaListo } from './partir.ts'
+import { apuntarPreparados, type Preparado } from './preparados.ts'
 
 /** Formatos de texto editable que se pasan a PDF. */
 export const EDITABLES = ['docx', 'odt']
@@ -124,6 +126,8 @@ export async function prepararTanda(rutas: string[], salida: string, conOcr = tr
     return completo
   }
 
+  // Lo que se va preparando, para que `escanear` reconozca después los originales. Ver preparados.ts.
+  const preparados: Preparado[] = []
   const temporal = await mkdtemp(join(tmpdir(), 'tanda-'))
   try {
     for (const escaneo of escaneos) {
@@ -133,6 +137,7 @@ export async function prepararTanda(rutas: string[], salida: string, conOcr = tr
       if (yaEstaListo(analisis)) { resumen.sinTocar.push(escaneo); continue }
       const nombre = nombres.get(escaneo)!
       const partes = await partir(contenido, analisis.separadoras)
+      const antes = resumen.creados.length
       for (const [i, parte] of partes.entries()) {
         // Un escaneo con varios documentos da «nombre-01.pdf», «nombre-02.pdf»…
         const sufijo = partes.length > 1 ? `-${String(i + 1).padStart(2, '0')}` : ''
@@ -142,13 +147,22 @@ export async function prepararTanda(rutas: string[], salida: string, conOcr = tr
         await writeFile(sinOcr, parte)
         await ocr(sinOcr, final)
       }
+      preparados.push({
+        original: escaneo, sha256: createHash('sha256').update(contenido).digest('hex'),
+        pdf: resumen.creados.slice(antes).map(c => basename(c)).join(', '),
+      })
     }
     // LibreOffice usa una carpeta de configuración propia, la misma para toda la tanda. Ver aPdf.
     const perfil = join(temporal, 'libreoffice')
     for (const editable of editables) {
-      await aPdf(programa!, editable, destino(`${nombres.get(editable)!}.pdf`), perfil)
+      const final = destino(`${nombres.get(editable)!}.pdf`)
+      await aPdf(programa!, editable, final, perfil)
+      preparados.push({ original: editable, sha256: await huella(editable), pdf: basename(final) })
     }
   } finally {
+    // También si algo falla a medias: lo que sí se preparó queda apuntado.
+    // Si no se puede escribir la lista, no se tapa el error de verdad: solo se pierde el aviso de `escanear`.
+    await apuntarPreparados(salida, preparados).catch(() => {})
     await rm(temporal, { recursive: true, force: true })
   }
   return resumen

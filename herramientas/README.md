@@ -40,6 +40,7 @@ npm run preparar -- [--salida <carpeta>] [--sin-ocr] <carpeta o archivo> [más c
 - **El resto** (fotos, por ejemplo) no necesita preparación: entra tal cual en `escanear`.
 - **Salida:** una carpeta nueva por tanda. Si no se dice otra con `--salida`, `Escaneos AAAA-MM`, con el año y el mes de hoy, junto a la primera carpeta o archivo de entrada. Nunca dentro de este repositorio, que es público: si la carpeta de salida queda dentro, `preparar` se para sin crear nada.
 - **Originales:** solo se leen. Tampoco se escribe encima de nada que ya esté en la carpeta de salida: si ya tiene alguno de los nombres, `preparar` se para antes de crear nada.
+- **Lista de lo preparado:** en la carpeta de la tanda deja `.preparados.csv`, con la ruta y la huella de cada original y los PDF que salieron de él. Así `escanear` reconoce después los originales, y nadie carga por error la tanda entera o el `.docx` en vez de los PDF.
 
 Un escaneo `tanda.pdf` con tres documentos da `tanda-01.pdf`, `tanda-02.pdf` y `tanda-03.pdf`. Un `acta.docx` da `acta-docx.pdf`.
 
@@ -143,10 +144,28 @@ Qué hace:
 - Deja vacías las columnas que rellena una persona: `incluir`, `tipo`, `titulo`, `fecha`, `emisor`, `instalaciones` y `caduca`.
 - Marca los archivos repetidos. `duplicado_de` apunta al primero con el mismo contenido.
 - Avisa en `aviso` de lo que no es PDF y de lo que pasa de 100 MB, que GitHub no admite.
+- Avisa en `aviso` de los originales que ya pasaron por `preparar`: hay que cargar los PDF que salieron de ellos. `importar` no los carga.
 - Si el listado ya existe, conserva lo rellenado y añade solo los archivos nuevos.
 - No cambia ni mueve ningún archivo.
 
-Las rutas del listado se escriben desde la carpeta común a todo lo escaneado. Para que al repetir se reconozcan los archivos, escanea siempre la misma carpeta.
+### Rutas completas: cada escaneo se suma a la hoja
+
+`ruta_original` guarda la ruta completa de cada archivo, por ejemplo `D:\Papel\Caja 1\caldera.pdf`. Así los documentos pueden estar en varias carpetas, en sitios distintos y escaneados en días distintos: cada escaneo se suma al mismo listado sin mover nada.
+
+```powershell
+npm run escanear -- --salida listado.csv "D:\Papel\Caja 1"
+npm run escanear -- --salida listado.csv "\\servidor\documentos\Mantenimiento"
+```
+
+Después del segundo, el listado tiene los archivos de las dos carpetas. Si una carpeta no se vuelve a escanear, sus filas se quedan: `escanear` avisa de que no las ve, pero no borra nada.
+
+Al repetir `escanear`:
+
+- **Archivo movido o renombrado:** si una fila ya no encuentra su archivo y aparece uno nuevo con la misma huella, es el mismo archivo. Se cambia su ruta y se conserva lo rellenado. No sale duplicado.
+- **Archivo cambiado:** si un archivo sigue en su sitio pero su contenido ha cambiado, se apuntan su huella, su tamaño y su fecha nuevos, y `aviso` dice «ha cambiado desde el escaneo anterior: revisa la ficha». Si no, la versión nueva nunca llegaría al Libro y nadie se enteraría.
+- **Listado antiguo, con rutas relativas:** sus filas se reconocen por la huella y pasan a ruta completa, sin perder lo rellenado.
+
+En Windows, las rutas se comparan sin distinguir mayúsculas, como hace el propio Windows.
 
 El listado abre en Excel en español: UTF-8 con BOM y separador `;`.
 
@@ -164,22 +183,24 @@ npm run escanear -- --salida \\servidor\carpeta\listado.csv \\servidor\carpeta\d
 
 Escribe estas rutas en PowerShell. En Git Bash las barras `\\` del principio se pierden.
 
+**Usa la dirección `\\servidor\…`, no una letra de unidad como `Z:`.** La letra la elige cada ordenador: la misma carpeta puede ser `Z:` en uno y `Y:` en otro, y el listado guarda la ruta completa. Si escaneas una letra de red, `escanear` avisa y te dice qué dirección usar.
+
 ## importar
 
 Carga en el Libro los documentos marcados con `si` en el listado.
 
 ```bash
-npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--origen <carpeta>] [--simular]
+npm run importar -- --listado listado.csv --repo <dirección-del-repositorio> [--simular]
 ```
 
 - `--repo` es la dirección del repositorio privado del edificio en GitHub, por ejemplo `https://github.com/<organización>/<edificio>.git`. No hace falta tenerlo clonado. Tiene que ser el repositorio que el Libro tiene apuntado para ese edificio. Si es otro, o si el edificio no tiene ninguno apuntado, `importar` se para antes de escribir nada.
-- `--origen` es la carpeta que se escaneó. Las rutas del listado cuentan desde ella. Si no se pone, vale la carpeta del listado.
+- Cada archivo se busca en su `ruta_original`, que es la ruta completa. Una ruta relativa, como en el listado de ejemplo, cuenta desde la carpeta del listado.
 - `--simular` comprueba todo y no escribe nada. Con `--simular` no hace falta `--repo`.
 
 Ejemplo con los datos ficticios, sin escribir nada:
 
 ```bash
-npm run importar -- --simular --listado ../edificio-ejemplo-entrada/listado.csv --origen ../edificio-ejemplo-entrada/entrada
+npm run importar -- --simular --listado ../edificio-ejemplo-entrada/listado.csv
 ```
 
 ### Configuración

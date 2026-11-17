@@ -325,6 +325,47 @@ await como('admin', async () => {
   ok(hu.length > 0, `documentos que faltan: ${hu.length}`)
 })
 
+console.log('\nExportación del índice')
+// Como la función «exportar», con la clave de servicio. Deshace al terminar.
+async function comoServicio(fn) {
+  await db.exec('begin')
+  try { await db.exec('set local role service_role'); return await fn() }
+  finally { await db.exec('rollback') }
+}
+const exportar = async () => Object.fromEntries((await filas('select archivo, contenido from public.exportar_indice($1)', [edificio]))
+  .map(f => [f.archivo, f.contenido]))
+const lineas = texto => texto.split('\r\n').slice(0, -1)
+
+await como('admin', async () => ok(await falla(() => exportar()), 'la administración no puede llamar a exportar_indice'))
+await como('anon', async () => ok(await falla(() => exportar()), 'sin sesión no se puede llamar a exportar_indice'))
+await comoServicio(async () => {
+  const indice = await exportar()
+  ok(Object.keys(indice).sort().join() === 'indice/documentos.csv,indice/instalaciones.csv,indice/partes.csv,indice/revisiones.csv',
+    'exporta los cuatro CSV a indice/')
+  // La marca BOM se mira dentro de la base de datos: al pasar a JavaScript, PGlite la quita del principio.
+  for (const archivo of Object.keys(indice)) {
+    const plantilla = readFileSync(join(base, '..', 'plantilla-edificio', archivo), 'utf8').replace(/^﻿/, '')
+    ok(indice[archivo].replace(/^﻿/, '').startsWith(plantilla), `${archivo} lleva la cabecera de la plantilla, con \\r\\n`)
+  }
+  ok(await cuenta(`select 1 from public.exportar_indice($1) where left(contenido, 1) = chr(65279) and right(contenido, 2) = e'\\r\\n'`, [edificio]) === 4,
+    'los cuatro llevan la marca BOM, para Excel, y acaban en salto de línea')
+  ok(lineas(indice['indice/documentos.csv']).length === 13, 'documentos.csv: cabecera y 12 documentos')
+  ok(lineas(indice['indice/instalaciones.csv']).length === 7, 'instalaciones.csv: cabecera y 6 instalaciones')
+  ok(lineas(indice['indice/revisiones.csv']).length === 5, 'revisiones.csv: cabecera y 4 revisiones')
+  ok(lineas(indice['indice/partes.csv']).length === 21, 'partes.csv: cabecera y 20 partes')
+  ok(!indice['indice/instalaciones.csv'].includes('\r\nOtra;'), 'no lleva las instalaciones de otro edificio')
+  ok(JSON.stringify(await exportar()) === JSON.stringify(indice), 'dos exportaciones seguidas salen iguales: sin cambios, no hay commit')
+
+  await db.query(`update public.documentos set eliminado_en = now() where id = $1`, [doc])
+  ok(lineas((await exportar())['indice/documentos.csv']).length === 12, 'un documento en la papelera no sale en el índice')
+
+  await db.query(`update public.instalaciones set notas = 'Llave en la caja; la "pequeña"' where id = $1`, [calefaccion])
+  await db.query(`update public.instalaciones set marca = '=HIPERVINCULO("x")' where id = $1`, [extintores])
+  const inst = (await exportar())['indice/instalaciones.csv']
+  ok(inst.includes(';"Llave en la caja; la ""pequeña"""\r\n'), 'un texto con punto y coma o comillas va entre comillas')
+  ok(inst.includes(`;"'=HIPERVINCULO(""x"")";`), 'un texto que empieza por = lleva un apóstrofo delante, para que Excel no lo tome por fórmula')
+})
+
 console.log(`\n${total - fallos} de ${total} comprobaciones correctas`)
 if (fallos) console.log(`\nHan fallado:\n${fallidas.map(t => `- ${t}`).join('\n')}`)
 await db.close()

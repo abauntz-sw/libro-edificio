@@ -1,0 +1,28 @@
+# Comprueba las funciones de Supabase en cada Pull Request y al entrar en main.
+name: Funciones
+
+# El push solo en main: en una rama con PR, el pull_request ya lo comprueba.
+# Con push en todas las ramas, cada cambio de un PR se comprobaría dos veces.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Tipos y tests (Deno)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: supabase/functions/archivos
+    steps:
+      - uses: actions/checkout@v5
+      # Las funciones de Supabase se ejecutan con Deno, así que se prueban con Deno.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Comprueba los tipos
+        run: deno task tipos
+      # Los tests usan un GitHub y una base de datos de mentira: no hacen falta claves.
+      - name: Ejecuta los tests
+        run: deno task test

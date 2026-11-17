@@ -118,3 +118,12 @@ test('las instalaciones se buscan por tipo o por nombre, y varias van separadas 
   expect(buscarInstalaciones('electricidad', dos).errores[0]).toMatch(/hay varias instalaciones de tipo «electricidad»/)
   expect(buscarInstalaciones('cuadro del anexo', dos).ids).toEqual(['x'])
 })
+
+test('no carga un original que ya pasó por preparar: hay que cargar los PDF que salieron', () => {
+  const aviso = 'no es PDF; ya preparado: usa los PDF de «Escaneos 2026-11» (C:\Papel\Escaneos 2026-11)'
+  expect(mensajes([fila({ aviso, extension: 'docx' })])).toEqual([
+    '2: este archivo ya pasó por preparar: carga los PDF que salieron de él (lo dice la columna aviso), no este',
+  ])
+  // Sin «si» no estorba.
+  expect(mensajes([fila({ aviso, incluir: '' })])).toEqual([])
+})

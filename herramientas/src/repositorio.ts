@@ -6,7 +6,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { copyFile, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { huella } from './archivos.ts'
 import type { Documento, ErrorFila } from './comprobar.ts'
@@ -21,6 +21,12 @@ async function git(repo: string, ...argumentos: string[]): Promise<string> {
 }
 
 /**
+ * Dónde está el original de una fila. `escanear` guarda la ruta completa, que se usa tal cual.
+ * Una ruta relativa, como las del listado de ejemplo, cuenta desde `origen`: la carpeta del listado.
+ */
+export const rutaDelOriginal = (origen: string, rutaOriginal: string) => resolve(origen, rutaOriginal)
+
+/**
  * Comprueba que cada original sigue en su sitio, que no ha cambiado desde que se escaneó y que GitHub lo admite.
  * Devuelve los errores y el tamaño de cada archivo, por fila.
  */
@@ -28,7 +34,7 @@ export async function comprobarArchivos(documentos: Documento[], origen: string)
   const errores: ErrorFila[] = []
   const bytes = new Map<number, number>()
   for (const doc of documentos) {
-    const original = join(origen, doc.rutaOriginal)
+    const original = rutaDelOriginal(origen, doc.rutaOriginal)
     if (!existsSync(original)) {
       errores.push({ fila: doc.fila, mensaje: `no encuentro el archivo ${original}` })
       continue
@@ -121,7 +127,7 @@ export async function copiarDocumentos(repo: string, origen: string, documentos:
       throw new Error(`${doc.ruta} ya existe en el repositorio con otro contenido. No se ha sobrescrito`)
     }
     await mkdir(dirname(destino), { recursive: true })
-    await copyFile(join(origen, doc.rutaOriginal), destino)
+    await copyFile(rutaDelOriginal(origen, doc.rutaOriginal), destino)
     copiados++
   }
   return copiados

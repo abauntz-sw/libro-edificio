@@ -1,9 +1,12 @@
-# Comprueba la base de datos en cada push y en cada Pull Request.
+# Comprueba la base de datos en cada Pull Request y al entrar en main.
 # Si una comprobación falla, el CI sale en rojo y dice cuál.
 name: Base de datos
 
+# El push solo en main: en una rama con PR, el pull_request ya lo comprueba.
+# Con push en todas las ramas, cada cambio de un PR se comprobaría dos veces.
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:

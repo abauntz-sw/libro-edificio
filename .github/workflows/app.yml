@@ -1,0 +1,32 @@
+# Comprueba la aplicación web en cada Pull Request y al entrar en main.
+name: Aplicación
+
+# El push solo en main: en una rama con PR, el pull_request ya lo comprueba.
+# Con push en todas las ramas, cada cambio de un PR se comprobaría dos veces.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    name: Tipos, tests y construcción
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+      # npm ci instala justo las versiones apuntadas en package-lock.json.
+      - name: Instala las dependencias
+        run: npm ci
+      - name: Comprueba los tipos
+        run: npm run tipos
+      - name: Ejecuta los tests
+        run: npm test
+      # Construye la web igual que al publicarla. Aquí no hacen falta las claves.
+      - name: Construye la aplicación
+        run: npm run build

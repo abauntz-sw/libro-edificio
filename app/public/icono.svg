@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Un libro abierto bajo un tejado. -->
+  <rect width="512" height="512" rx="96" fill="#1d5c4d"/>
+  <polyline points="112,228 256,112 400,228" fill="none" stroke="#fff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M244 262C210 240 168 238 128 252V384C168 370 210 372 244 394Z" fill="#fff"/>
+  <path d="M268 262C302 240 344 238 384 252V384C344 370 302 372 268 394Z" fill="#fff"/>
+</svg>

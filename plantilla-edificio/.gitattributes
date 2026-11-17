@@ -1,0 +1,7 @@
+# Este repositorio es un archivo: Git nunca debe cambiar sus archivos al guardarlos ni al descargarlos.
+# Sin esto, Git en Windows cambia los saltos de línea de los archivos que le parecen texto,
+# y en la copia de la oficina la huella de un PDF ya no coincidiría con la del índice.
+documentos/** -text
+fotos/** -text
+firmas/** -text
+indice/** -text

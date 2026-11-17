@@ -14,6 +14,7 @@ Lo escribe la aplicación. No hace falta la aplicación para leerlo: basta este 
 | `fotos/` | Las fotos de los partes de trabajo, por año |
 | `firmas/` | Las firmas de los partes de trabajo, por año |
 | `indice/` | La lista de todo lo guardado. Se actualiza cada día |
+| `copia/` | Lo que mantiene al día la copia del ordenador de la oficina. Ver [`copia/README.md`](copia/README.md) |
 
 ## Por qué los archivos tienen nombres raros
 
@@ -41,6 +42,20 @@ Los nombres no llevan títulos ni nombres de personas, para no mostrar datos per
 | `instalaciones` | A qué instalaciones se refiere. Varias van separadas por comas |
 | `nombre_original` | Cómo se llamaba el archivo cuando se recibió |
 | `sha256` | La huella del archivo. Sirve para comprobar que no ha cambiado |
+
+## Los otros índices
+
+En `indice/` hay tres hojas más, con el mismo formato:
+
+| Archivo | Qué lista | Columnas principales |
+|---|---|---|
+| `instalaciones.csv` | Cada instalación del edificio | `nombre`, `tipo`, `estado`, `empresa` que la mantiene |
+| `revisiones.csv` | Las revisiones obligatorias de cada instalación | `periodicidad_meses`, `ultima`, `proxima`. Si `verificado` dice `no`, la periodicidad no está revisada por un técnico |
+| `partes.csv` | Los partes de trabajo, del más antiguo al más nuevo | `fecha`, `instalacion`, `descripcion`. `certificado`, `firma` y `fotos` dicen dónde están sus archivos |
+
+Los partes no se cambian. Si uno estaba mal, hay otro más nuevo que lo corrige.
+
+Si un texto empieza por `=`, `+`, `-` o `@`, lleva un apóstrofo delante. Sin él, la hoja de cálculo lo tomaría por una fórmula.
 
 ## Cómo comprobar que un archivo no ha cambiado
 

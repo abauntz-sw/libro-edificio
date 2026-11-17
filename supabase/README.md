@@ -13,6 +13,7 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |
+| `functions/` | Funciones que se ejecutan en Supabase. Ver su [README](functions/README.md) |
 
 ## Probarlo sin cuenta
 

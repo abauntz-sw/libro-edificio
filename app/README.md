@@ -42,7 +42,23 @@ El identificador del parte se crea en el móvil al empezarlo. Si el envío falla
 
 Un parte no se cambia ni se borra. Una corrección es un parte nuevo.
 
-Todavía no lleva fotos ni certificado: llegarán en un paso siguiente, porque la función `archivos` solo acepta PDF. Tampoco funciona sin cobertura: es la tarea 1.7.
+Todavía no lleva fotos ni certificado: llegarán en un paso siguiente, porque la función `archivos` solo acepta PDF.
+
+## Sin cobertura
+
+En el refugio a menudo no hay red. Ningún parte se pierde por eso:
+
+1. **El parte se guarda primero en el móvil**, en IndexedDB, y luego se envía. Solo se borra del móvil cuando la base de datos lo ha aceptado.
+2. **Si no hay red**, la pantalla lo dice y el parte queda pendiente. En Inicio se ve cuántos quedan, con un botón «Enviar ahora».
+3. **Se reintenta solo** al abrir la aplicación, al volver la conexión y al volver a la pestaña. No se depende de que el navegador envíe en segundo plano, porque Safari, en iPhone, no lo hace.
+4. **Nunca se duplica.** El identificador del parte lo crea el móvil, y la base de datos ignora uno que ya tiene. Da igual si la respuesta se perdió por el camino.
+5. **Si la base de datos lo rechaza** (por ejemplo, porque la revisión ya no está a cargo de esa persona), no se reintenta: se conserva con el motivo. La persona lo ve en Inicio y decide si lo descarta.
+6. **El formulario se abre sin red**, con las instalaciones y revisiones de la última vez que hubo conexión. No da ningún permiso: al enviar, la base de datos lo comprueba todo otra vez.
+7. **Se pide almacenamiento persistente**, para que el navegador no borre los partes guardados si falta espacio o la app no se usa en días.
+
+En un móvil compartido, cada persona solo envía los suyos. Al salir con partes pendientes, la aplicación avisa: se quedan en el móvil y se envían cuando esa persona vuelva a entrar.
+
+Un envío que tarda más de 20 segundos se da por no llegado. Si en realidad llegó, el siguiente intento no lo duplica.
 
 ## Cómo se arranca
 
@@ -70,6 +86,13 @@ Abre la dirección que aparece, normalmente `http://localhost:5173`.
 | `npm run build` | Construye la web en `dist/`, lista para publicar |
 | `npm run preview` | Sirve `dist/`, para probarla como quedará publicada |
 | `npm run iconos` | Vuelve a crear los iconos a partir de `public/icono.svg` |
+| `npm run e2e` | Tests de extremo a extremo con Playwright: la web construida, en un navegador de verdad |
+
+### Tests de extremo a extremo
+
+Están en `e2e/`. Comprueban, cortando y devolviendo la red, que un parte llega al reconectar y no se duplica. No usan ningún proyecto de Supabase: `e2e/supabase-falso.ts` contesta por él con datos ficticios.
+
+La primera vez hay que descargar el navegador: `npx playwright install chromium`. En Windows también sirve Edge, sin descargar nada: `PLAYWRIGHT_CANAL=msedge npm run e2e` (en PowerShell, `$env:PLAYWRIGHT_CANAL='msedge'; npm run e2e`).
 
 ## Cómo se entra
 
@@ -115,5 +138,9 @@ Después, añade la dirección pública a las Redirect URLs de Supabase.
 | `src/acceso.ts` | Lee quién es la persona conectada y cuál es su edificio |
 | `src/Mensaje.tsx` | Pantalla con un solo mensaje |
 | `src/estilos.css` | Colores y letras, tomados del prototipo |
+| `src/cola.ts` | Los partes guardados en el móvil hasta que llegan |
+| `src/recuerdo.ts` | Lo último que se leyó bien, para trabajar sin red |
+| `src/Pendientes.tsx` | El aviso de partes sin enviar y de los rechazados |
 | `public/` | Iconos de la app |
 | `tests/` | Tests |
+| `e2e/` y `playwright.config.ts` | Tests de extremo a extremo |

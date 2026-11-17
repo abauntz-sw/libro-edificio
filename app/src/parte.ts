@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Perfil } from './acceso.ts'
+import { clasificar, type Resultado } from './cola.ts'
 
 export type TipoParte = 'preventivo' | 'correctivo' | 'inspeccion' | 'urgencia' | 'comprobacion' | 'incidencia'
 
@@ -118,15 +119,22 @@ export async function leerDatosParte(supabase: SupabaseClient): Promise<{ instal
   return { instalaciones: instalaciones.data, revisiones: revisiones.data }
 }
 
+/** La fila que se inserta en `partes`. */
+export type FilaParte = ReturnType<typeof filaParte>
+
 /**
  * Envía el parte. Si ya había llegado (el mismo identificador), no hace nada: `on conflict do nothing`.
- * Devuelve el mensaje de error, o `undefined` si ha ido bien.
+ * Dice si ha llegado, si hay que reintentarlo más tarde o si la base de datos lo rechaza.
  */
-export async function enviarParte(supabase: SupabaseClient, fila: ReturnType<typeof filaParte>): Promise<string | undefined> {
-  const { error } = await supabase.from('partes').upsert(fila, { onConflict: 'id', ignoreDuplicates: true })
-  if (!error) return undefined
-  if (!navigator.onLine) return 'No hay conexión. Cuando vuelva, pulsa Enviar otra vez: no se duplicará.'
-  // 42501: la base de datos no le deja. Pasa si, por ejemplo, la revisión ha cambiado de responsable.
-  if (error.code === '42501') return 'No puedes registrar este parte. Puede que la revisión ya no esté a tu cargo.'
-  return `No se pudo enviar el parte: ${error.message}`
+export async function enviarParte(supabase: SupabaseClient, fila: FilaParte): Promise<Resultado> {
+  try {
+    // Con una raya de cobertura, una petición puede quedarse colgada. A los 20 segundos se da por no llegada.
+    // Si en realidad llegó, reenviarla no duplica nada.
+    const { error } = await supabase.from('partes').upsert(fila, { onConflict: 'id', ignoreDuplicates: true })
+      .abortSignal(AbortSignal.timeout(20_000))
+    return error ? clasificar(error) : { tipo: 'enviado' }
+  } catch {
+    // Sin red, la librería a veces lanza en vez de devolver el error.
+    return { tipo: 'sin-conexion' }
+  }
 }

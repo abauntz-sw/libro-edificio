@@ -1,16 +1,28 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { useEffect, useState } from 'react'
 import type { Acceso } from './acceso.ts'
+import type { Cola } from './cola.ts'
 import {
-  BORRADOR_VACIO, type Borrador, enviarParte, faltaEnParte, filaParte, hoyLocal, type Instalacion, leerDatosParte,
+  BORRADOR_VACIO, type Borrador, faltaEnParte, filaParte, hoyLocal, type Instalacion, leerDatosParte,
   NOMBRE_TIPO, type Revision, revisionesDe, sumarMeses, tiposDe,
 } from './parte.ts'
+import { CLAVE, conRecuerdo } from './recuerdo.ts'
 
 const fecha = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })
 
-/** Registrar parte: dónde, si cierra una revisión, qué se ha hecho y una frase. Pensado para el móvil. */
-export function Parte({ supabase, acceso, volver }: { supabase: SupabaseClient; acceso: Acceso; volver: () => void }) {
+/**
+ * Registrar parte: dónde, si cierra una revisión, qué se ha hecho y una frase. Pensado para el móvil.
+ * Funciona sin cobertura: el parte se guarda en el móvil y la cola lo envía cuando hay red.
+ */
+export function Parte({ supabase, authId, acceso, cola, volver }: {
+  supabase: SupabaseClient
+  authId: string
+  acceso: Acceso
+  cola: Cola
+  volver: () => void
+}) {
   const [datos, setDatos] = useState<{ instalaciones: Instalacion[]; revisiones: Revision[] } | null>(null)
+  const [deMemoria, setDeMemoria] = useState(false)
   const [errorDatos, setErrorDatos] = useState('')
   const [b, setB] = useState<Borrador>(BORRADOR_VACIO)
   // El identificador se crea al empezar el parte. Si el envío falla y se repite, es el mismo: no se duplica.
@@ -22,9 +34,12 @@ export function Parte({ supabase, acceso, volver }: { supabase: SupabaseClient; 
 
   useEffect(() => {
     let vigente = true
-    leerDatosParte(supabase).then(d => vigente && setDatos(d), (e: Error) => vigente && setErrorDatos(e.message))
+    conRecuerdo(CLAVE.parte(authId), () => leerDatosParte(supabase)).then(
+      r => { if (vigente) { setDatos(r.datos); setDeMemoria(r.deMemoria) } },
+      (e: Error) => vigente && setErrorDatos(navigator.onLine ? e.message : 'No hay conexión, y este móvil todavía no tiene guardadas tus instalaciones. Ábrelo una vez con cobertura.'),
+    )
     return () => { vigente = false }
-  }, [supabase, intento])
+  }, [supabase, authId, intento])
 
   const hoy = hoyLocal()
   const tipos = tiposDe(acceso.perfil)
@@ -41,12 +56,17 @@ export function Parte({ supabase, acceso, volver }: { supabase: SupabaseClient; 
     const falta = faltaEnParte(b, revision, hoy)
     if (falta) { setAviso(falta); return }
     setEnviando(true)
-    const error = await enviarParte(supabase, filaParte(id, b, revision, hoy))
+    const resultado = await cola.registrar(authId, filaParte(id, b, revision, hoy))
     setEnviando(false)
-    if (error) { setAviso(error); return }
-    setEnviado(revision
-      ? `Parte enviado. La revisión «${revision.descripcion}» queda hecha hoy.`
-      : 'Parte enviado.')
+    // Rechazado: se queda en el formulario para corregirlo. Con el mismo identificador, no se duplica.
+    if (resultado.tipo === 'rechazado') { setAviso(resultado.motivo); return }
+    if (resultado.tipo === 'sin-conexion') {
+      setEnviado('Sin cobertura. El parte queda guardado en este móvil y se enviará solo cuando vuelva la conexión.')
+    } else {
+      setEnviado(revision
+        ? `Parte enviado. La revisión «${revision.descripcion}» queda hecha hoy.`
+        : 'Parte enviado.')
+    }
     setB(BORRADOR_VACIO)
     setId(crypto.randomUUID())
   }
@@ -64,6 +84,7 @@ export function Parte({ supabase, acceso, volver }: { supabase: SupabaseClient; 
       )}
       {!datos && !errorDatos && <p className="suave">Cargando…</p>}
 
+      {deMemoria && <p className="sin-red" role="status">Sin conexión. Las instalaciones y revisiones son las de la última vez que hubo red.</p>}
       {enviado && <p className="hecho" role="status">{enviado}</p>}
 
       {datos && (

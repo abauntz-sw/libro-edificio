@@ -2,7 +2,22 @@
 
 La web del Libro del Edificio. Es una PWA: se abre en el navegador y también se puede instalar en el móvil como una app.
 
-De momento es un esqueleto. Deja entrar con el correo, muestra el nombre del edificio y el informe de huecos.
+De momento es un esqueleto. Deja entrar con el correo, muestra el nombre del edificio y el informe de huecos, y deja subir documentos.
+
+## Subir documentos
+
+La administración y las empresas pueden subir PDF desde la web, sin herramientas ni Git. La guarda y la consulta no ven el botón.
+
+1. Se eligen o se arrastran los PDF. Cada uno, como mucho, 25 MB.
+2. La web comprueba cada archivo antes de subir nada:
+   - Si pasa del límite o no es un PDF, lo dice y no lo sube.
+   - Calcula su huella (`sha256`) en el navegador. Si ese mismo archivo ya está en el Libro, o se repite en la tanda, avisa. Se puede quitar o guardar igualmente.
+3. Se rellena la ficha de cada uno: título, tipo, fecha, caducidad e instalaciones. Una empresa tiene que marcar al menos una instalación suya.
+4. **Guardar** manda los archivos uno a uno a la función `archivos`, que los guarda en el repositorio del edificio y crea su ficha.
+
+Cada archivo lleva un identificador desde que se elige. Si una subida falla, por ejemplo por la cobertura, se pulsa Guardar otra vez y no se duplica nada.
+
+El aviso de duplicados solo encuentra lo que la persona puede ver: una empresa no sabe si otra ya subió ese archivo.
 
 ## Informe de huecos
 

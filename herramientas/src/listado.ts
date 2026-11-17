@@ -100,9 +100,12 @@ export interface Combinacion {
  * - Si un archivo ha desaparecido de su ruta y aparece otro con la misma huella, es el mismo archivo movido
  *   o renombrado: se cambia su ruta y se conserva lo rellenado, en vez de duplicarlo.
  * - Los archivos nuevos se añaden al final. En cada uno repetido, `duplicado_de` apunta al primero con la misma huella.
+ * - Las filas de `cargadas` ya están en el Libro y apartadas en `[en-el-libro]`, donde `escanear` no entra.
+ *   No se dan por desaparecidas ni por cambiadas.
  */
-export function combinar(anteriores: Fila[], escaneadas: Fila[], plataforma = process.platform): Combinacion {
+export function combinar(anteriores: Fila[], escaneadas: Fila[], plataforma = process.platform, cargadas = new Set<string>()): Combinacion {
   const clave = (ruta: string) => claveDeRuta(ruta, plataforma)
+  const enElLibro = new Set([...cargadas].map(clave))
   const enDisco = new Map(escaneadas.map(f => [clave(f.ruta_original), f]))
   const filas = anteriores.map(f => ({ ...f }))
   const resultado: Combinacion = { filas, nuevas: 0, desaparecidas: [], movidas: [], cambiadas: [] }
@@ -110,6 +113,7 @@ export function combinar(anteriores: Fila[], escaneadas: Fila[], plataforma = pr
   // Las que siguen en su sitio: se mira si han cambiado. Las que no están, se guardan por huella.
   const faltanPorHuella = new Map<string, Fila[]>()
   for (const fila of filas) {
+    if (enElLibro.has(clave(fila.ruta_original))) continue
     const actual = enDisco.get(clave(fila.ruta_original))
     if (!actual) {
       faltanPorHuella.set(fila.sha256, [...(faltanPorHuella.get(fila.sha256) ?? []), fila])

@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 supabase/.temp/
+dist-e2e/
+test-results/
+playwright-report/
 # Claves privadas, como la de la GitHub App. Van en los secretos de Supabase, nunca aquí.
 *.pem
 

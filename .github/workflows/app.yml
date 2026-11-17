@@ -30,3 +30,30 @@ jobs:
       # Construye la web igual que al publicarla. Aquí no hacen falta las claves.
       - name: Construye la aplicación
         run: npm run build
+
+  e2e:
+    name: Sin conexión, con Playwright
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: lts/*
+      - name: Instala las dependencias
+        run: npm ci
+      # Solo Chromium, con lo que necesita del sistema.
+      - name: Instala el navegador
+        run: npx playwright install --with-deps chromium
+      # No usa ningún proyecto de Supabase: el test contesta por él.
+      - name: Ejecuta los tests de extremo a extremo
+        run: npm run e2e
+      - name: Guarda la traza si falla
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traza
+          path: app/test-results/
+          retention-days: 7

@@ -10,6 +10,9 @@ const IGNORADOS = new Set(['thumbs.db', 'desktop.ini'])
 
 const esIgnorado = (nombre: string) => nombre.startsWith('.') || IGNORADOS.has(nombre.toLowerCase())
 
+/** Donde `importar` aparta lo ya cargado. `escanear` no entra: lo de dentro ya está en el Libro. Ver en-el-libro.ts. */
+export const CARPETA_EN_EL_LIBRO = '[en-el-libro]'
+
 /** Devuelve la huella SHA-256 de un archivo. Lo lee por trozos, así vale también para archivos grandes. */
 export function huella(ruta: string): Promise<string> {
   return new Promise((resolver, rechazar) => {
@@ -28,7 +31,9 @@ export async function listarArchivos(ruta: string): Promise<string[]> {
   for (const entrada of await readdir(ruta, { withFileTypes: true })) {
     if (esIgnorado(entrada.name)) continue
     const completa = join(ruta, entrada.name)
-    if (entrada.isDirectory()) archivos.push(...await listarArchivos(completa))
+    if (entrada.isDirectory()) {
+      if (entrada.name !== CARPETA_EN_EL_LIBRO) archivos.push(...await listarArchivos(completa))
+    }
     else if (entrada.isFile()) archivos.push(completa)
   }
   return archivos

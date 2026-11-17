@@ -7,7 +7,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { huella } from '../src/archivos.ts'
 import { comprobarListado, type Documento } from '../src/comprobar.ts'
-import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, ultimoCommit } from '../src/repositorio.ts'
+import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, rutaDelOriginal, ultimoCommit } from '../src/repositorio.ts'
 
 const git = (carpeta: string, ...argumentos: string[]) =>
   execFileSync('git', argumentos, { cwd: carpeta, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
@@ -177,4 +177,11 @@ test('avisa si un original falta o ha cambiado desde que se escaneó', async () 
   expect(errores[0].mensaje).toMatch(/ha cambiado desde que se escaneó/)
   expect(errores[1].mensaje).toMatch(/no encuentro el archivo/)
   expect(bytes.get(4)).toBe(4)
+})
+
+test('la ruta completa del listado se usa tal cual; una relativa cuenta desde la carpeta del listado', () => {
+  const listado = join(tmpdir(), 'carga')
+  const completa = join(tmpdir(), 'otra', 'Caja 1', 'a.pdf')
+  expect(rutaDelOriginal(listado, completa)).toBe(completa)
+  expect(rutaDelOriginal(listado, 'entrada/Contratos/a.pdf')).toBe(join(listado, 'entrada', 'Contratos', 'a.pdf'))
 })

@@ -4,7 +4,7 @@
 
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -49,6 +49,37 @@ export async function comprobarArchivos(documentos: Documento[], origen: string)
   return { errores, bytes }
 }
 
+const PREFIJO_COPIA = 'libro-carga-'
+
+/**
+ * Borra las copias temporales que dejó una carga cortada a la fuerza (cerrar la ventana, apagar el equipo).
+ * En esos casos no llega a borrarlas la propia carga, y pueden tener copias de documentos reales.
+ *
+ * Solo borra las de más de una hora, para no tocar la de otra carga que esté en marcha a la vez.
+ * Si no puede borrar alguna, sigue: no es motivo para parar la carga. Devuelve cuántas ha borrado.
+ */
+export async function limpiarCopiasAbandonadas(carpeta = tmpdir(), ahora = Date.now(), edadMinimaMs = 60 * 60 * 1000): Promise<number> {
+  let borradas = 0
+  let nombres: string[]
+  try {
+    nombres = (await readdir(carpeta)).filter(nombre => nombre.startsWith(PREFIJO_COPIA))
+  } catch {
+    return 0
+  }
+  for (const nombre of nombres) {
+    const ruta = join(carpeta, nombre)
+    try {
+      const info = await stat(ruta)
+      if (!info.isDirectory() || ahora - info.mtimeMs < edadMinimaMs) continue
+      await rm(ruta, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+      borradas++
+    } catch {
+      // En uso o sin permiso: se deja para la próxima vez.
+    }
+  }
+  return borradas
+}
+
 /**
  * Prepara una copia parcial del repositorio del edificio en una carpeta temporal, ejecuta la tarea y borra la copia.
  * La copia se borra siempre, también si la tarea falla.
@@ -57,7 +88,8 @@ export async function comprobarArchivos(documentos: Documento[], origen: string)
  * El resto de los documentos no llega al equipo.
  */
 export async function conCopiaTemporal<T>(direccion: string, rutas: string[], tarea: (copia: string) => Promise<T>): Promise<T> {
-  const copia = await mkdtemp(join(tmpdir(), 'libro-carga-'))
+  await limpiarCopiasAbandonadas()
+  const copia = await mkdtemp(join(tmpdir(), PREFIJO_COPIA))
   try {
     try {
       // --filter=blob:none: no baja el contenido de los archivos. --depth 1: solo el último commit. --no-checkout: no saca nada todavía.

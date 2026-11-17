@@ -1,13 +1,13 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { huella } from '../src/archivos.ts'
 import { comprobarListado, type Documento } from '../src/comprobar.ts'
-import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, rutaDelOriginal, ultimoCommit } from '../src/repositorio.ts'
+import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, limpiarCopiasAbandonadas, rutaDelOriginal, ultimoCommit } from '../src/repositorio.ts'
 
 const git = (carpeta: string, ...argumentos: string[]) =>
   execFileSync('git', argumentos, { cwd: carpeta, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
@@ -177,6 +177,28 @@ test('avisa si un original falta o ha cambiado desde que se escaneó', async () 
   expect(errores[0].mensaje).toMatch(/ha cambiado desde que se escaneó/)
   expect(errores[1].mensaje).toMatch(/no encuentro el archivo/)
   expect(bytes.get(4)).toBe(4)
+})
+
+test('borra las copias abandonadas de más de una hora y deja las recientes y lo demás', async () => {
+  const temporal = join(carpeta, 'temporal')
+  const vieja = join(temporal, 'libro-carga-vieja')
+  const reciente = join(temporal, 'libro-carga-reciente')
+  const otra = join(temporal, 'otra-cosa')
+  for (const c of [vieja, reciente, otra]) await mkdir(join(c, 'documentos'), { recursive: true })
+  await writeFile(join(vieja, 'documentos', 'real.pdf'), '%PDF-')
+  const ahora = Date.now()
+  const haceDosHoras = new Date(ahora - 2 * 60 * 60 * 1000)
+  await utimes(vieja, haceDosHoras, haceDosHoras)
+  await utimes(otra, haceDosHoras, haceDosHoras)
+
+  expect(await limpiarCopiasAbandonadas(temporal, ahora)).toBe(1)
+  expect(existsSync(vieja)).toBe(false)
+  expect(existsSync(reciente)).toBe(true)
+  expect(existsSync(otra)).toBe(true)
+})
+
+test('si la carpeta temporal no existe, no falla', async () => {
+  expect(await limpiarCopiasAbandonadas(join(carpeta, 'no-existe'))).toBe(0)
 })
 
 test('la ruta completa del listado se usa tal cual; una relativa cuenta desde la carpeta del listado', () => {

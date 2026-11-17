@@ -2,7 +2,13 @@
 
 La web del Libro del Edificio. Es una PWA: se abre en el navegador y también se puede instalar en el móvil como una app.
 
-De momento es un esqueleto. Deja entrar con el correo y muestra el nombre del edificio.
+De momento es un esqueleto. Deja entrar con el correo, muestra el nombre del edificio y el informe de huecos.
+
+## Informe de huecos
+
+Dice qué documentos faltan en cada instalación y deja descargarlo en CSV. Sale de la vista `huecos` de la base de datos: lo que la plantilla pide para cada tipo de instalación y la instalación no tiene. Un documento en la papelera no cuenta.
+
+La vista respeta los permisos: una empresa solo ve los huecos de su instalación. El CSV tiene el mismo formato que el índice del repositorio del edificio, para que Excel lo abra bien. Se crea en el navegador, sin pasar por ningún servidor.
 
 ## Cómo se arranca
 

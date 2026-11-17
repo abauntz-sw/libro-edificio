@@ -196,6 +196,11 @@ await como('calor', async () => {
   ok(await cuenta('select 1 from public.partes where instalacion_id <> $1', [calefaccion]) === 0, 'empresa no ve partes ajenos')
   ok(await cuenta('select 1 from public.avisos where clase = $1 and referencia_id <> $2', ['revision', revCaldera]) === 0, 'avisos filtrados para la empresa')
 })
+// La función de archivos hace esta consulta antes de entregar un documento.
+const docCalefaccion = 'e4996b97-8d6e-5a5a-892c-2239c6bd3c94'
+const veDocumento = () => cuenta('select ruta from public.documentos where id = $1', [docCalefaccion])
+await como('calor', async () => ok(await veDocumento() === 1, 'empresa ve por su identificador un documento de su instalación'))
+await como('aguas', async () => ok(await veDocumento() === 0, 'empresa no ve un documento ajeno aunque conozca su identificador'))
 
 console.log('\nAccesos cerrados')
 await como('extintores', async () => ok(await cuenta('select 1 from public.instalaciones') === 0, 'código caducado no ve nada'))
@@ -247,6 +252,11 @@ await como('calor', async () => {
   ok(await cuenta('select 1 from public.documentos where id = $1', [d1]) === 1, 'empresa archiva en su instalación')
   await archivar(d1, [calefaccion])
   ok(await cuenta('select 1 from public.documento_instalaciones where documento_id = $1', [d1]) === 1, 'repetir no duplica los enlaces')
+  // El mismo identificador con otra huella es otro archivo: no se da por bueno.
+  ok(await falla(() => filas(`select public.registrar_documento(
+    $1, 'certificado', 'Otra', '2026-11-06', 'Emisor', $2, 'b.pdf', repeat('b', 64), $3::uuid[])`,
+    [d1, `documentos/2026/${d1}.pdf`, [calefaccion]])), 'un identificador repetido con otra huella no vale')
+  ok((await filas('select titulo from public.documentos where id = $1', [d1]))[0].titulo === 'Prueba', 'la ficha de antes no cambia')
   ok(await falla(() => archivar('99999999-9999-4999-8999-999999999992', [extintores])), 'empresa no archiva en otra instalación')
 })
 await como('calor', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999993', [])), 'empresa no archiva sin instalación'))

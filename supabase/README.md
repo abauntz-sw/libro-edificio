@@ -10,10 +10,12 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261114000100_corrige_fuente_gas.sql` | Corrige la fuente de la revisión de gas, que citaba una orden foral derogada |
 | `migrations/20261115000000_ruta_de_documento.sql` | Obliga a que cada ficha apunte a su propio documento, en `documentos/` |
 | `migrations/20261115000100_ultimo_admin_con_caducidad.sql` | No deja el edificio sin administración por una fecha de caducidad |
+| `migrations/20261116000100_documento_repetido.sql` | Un identificador que ya existe solo se da por bueno si es el mismo archivo |
 | `migrations/20261116000200_permisos_cerrados_por_defecto.sql` | Hace que las tablas y funciones nuevas nazcan cerradas para la clave pública |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |
+| `functions/` | Funciones que se ejecutan en Supabase. Ver su [README](functions/README.md) |
 
 ## Probarlo sin cuenta
 

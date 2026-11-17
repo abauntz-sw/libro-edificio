@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 supabase/.temp/
+# Claves privadas, como la de la GitHub App. Van en los secretos de Supabase, nunca aquí.
+*.pem

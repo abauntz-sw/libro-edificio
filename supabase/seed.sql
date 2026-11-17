@@ -1,10 +1,14 @@
 -- Datos de ejemplo: un albergue inventado. Se puede cargar y borrar sin riesgo.
 -- Los identificadores son fijos para que la carga dé siempre el mismo resultado.
+-- Son valores inventados: no salen de la fórmula de importar (UUID v5 del edificio y la huella).
+-- Un documento cargado con importar tendrá otro identificador, y no pasa nada.
 -- Nunca añadas aquí datos reales: este archivo está en el repositorio público.
 --
 -- Las fechas cuentan desde el día de carga (current_date), así el ejemplo no envejece:
 -- siempre hay algo vencido, algo que vence pronto y algo al día. Solo los documentos
 -- de la reforma de 2021 tienen fecha fija, porque son historia y no caducan.
+-- Por eso los títulos y los nombres de archivo no llevan año. La carpeta de cada ruta
+-- (documentos/AAAA/) sí es fija y en el ejemplo no tiene por qué coincidir con el año de la fecha.
 -- Las revisiones se cargan sin fechas: las rellenan sus partes (revision_id) mediante
 -- el trigger actualizar_revision, igual que en la aplicación.
 
@@ -45,10 +49,10 @@ insert into public.documentos (id, edificio_id, tipo_id, titulo, fecha, emisor, 
   ('57938799-42fd-528d-b219-41464f06bf7c', 'bf8db03c-259a-54f2-8933-e6850777d963', 'licencia', 'Licencia de actividad', '2021-06-02', 'Ayuntamiento de Villaficticia', null, 'documentos/2021/57938799-42fd-528d-b219-41464f06bf7c.pdf', 'scan0013.pdf', '20a1846b14e664722268422b5412e7ed5be057f38bbe254770950764933720db'),
   ('2bdd3d61-2c18-56e8-ad6f-ea1e9083cde4', 'bf8db03c-259a-54f2-8933-e6850777d963', 'acta-inspeccion', 'Inspección de baja tensión', current_date - interval '2 years 2 months', 'Control Ficticio SA', current_date + interval '2 years 10 months', 'documentos/2024/2bdd3d61-2c18-56e8-ad6f-ea1e9083cde4.pdf', 'inspeccion BT.pdf', 'c9faff704ff9f965abdc505f9c56a11947cbcc31e6102b6867373b5a8ea73bf2'),
   ('e659d45e-f132-5b4e-8cd7-9a57dc0b4b86', 'bf8db03c-259a-54f2-8933-e6850777d963', 'contrato-mantenimiento', 'Contrato de calefacción', current_date - interval '16 months', 'Calor Ficticio SL', current_date - interval '4 months', 'documentos/2025/e659d45e-f132-5b4e-8cd7-9a57dc0b4b86.pdf', 'contrato_calefaccion.pdf', 'e4f6771c5e19a80ff79ad334007171075abacf04309dcd4ea03460f8efda2b94'),
-  ('026c5261-9782-5df0-abca-8b77cad928d7', 'bf8db03c-259a-54f2-8933-e6850777d963', 'informe', 'Revisión de caldera 2025', current_date - interval '13 months', 'Calor Ficticio SL', null, 'documentos/2025/026c5261-9782-5df0-abca-8b77cad928d7.pdf', 'revision caldera 2025.pdf', '508786d0e505a0bfe3bcf41b80da336a312e90f1e00af2a809ee4216da067a08'),
+  ('026c5261-9782-5df0-abca-8b77cad928d7', 'bf8db03c-259a-54f2-8933-e6850777d963', 'informe', 'Revisión de caldera', current_date - interval '13 months', 'Calor Ficticio SL', null, 'documentos/2025/026c5261-9782-5df0-abca-8b77cad928d7.pdf', 'revision caldera.pdf', '508786d0e505a0bfe3bcf41b80da336a312e90f1e00af2a809ee4216da067a08'),
   ('f3240cb8-676f-5510-af10-86ce101a49ba', 'bf8db03c-259a-54f2-8933-e6850777d963', 'contrato-mantenimiento', 'Contrato de contraincendios', current_date - interval '10 months', 'Extintores Ficticios SL', current_date + interval '14 months', 'documentos/2026/f3240cb8-676f-5510-af10-86ce101a49ba.pdf', 'contrato contraincendios.pdf', 'd1c95498380162b8e939e7aa6290cc97e30479f11f2bfe3957f78a987e3962b3'),
-  ('6ebd7abc-401d-5765-9f47-9b3dd0848976', 'bf8db03c-259a-54f2-8933-e6850777d963', 'poliza-seguro', 'Póliza de seguro 2026', current_date - interval '10 months', 'Seguros Ficticios SA', current_date + interval '2 months', 'documentos/2026/6ebd7abc-401d-5765-9f47-9b3dd0848976.pdf', 'poliza 2026.pdf', '02ca14a8b2c22d91c28d028d93f106b16e6a852cb97807456b524d47748a232e'),
-  ('9d6453ee-5b86-5eb9-8c8c-cbd701b881e4', 'bf8db03c-259a-54f2-8933-e6850777d963', 'certificado', 'Revisión anual de extintores 2026', current_date - interval '8 months', 'Extintores Ficticios SL', current_date + interval '4 months', 'documentos/2026/9d6453ee-5b86-5eb9-8c8c-cbd701b881e4.pdf', 'extintores ultima.pdf', '97f7353b32ae557e09dfced1edcafdfa5c58037890b3b61b5ca0dd0ab24b99f9'),
+  ('6ebd7abc-401d-5765-9f47-9b3dd0848976', 'bf8db03c-259a-54f2-8933-e6850777d963', 'poliza-seguro', 'Póliza de seguro', current_date - interval '10 months', 'Seguros Ficticios SA', current_date + interval '2 months', 'documentos/2026/6ebd7abc-401d-5765-9f47-9b3dd0848976.pdf', 'poliza.pdf', '02ca14a8b2c22d91c28d028d93f106b16e6a852cb97807456b524d47748a232e'),
+  ('9d6453ee-5b86-5eb9-8c8c-cbd701b881e4', 'bf8db03c-259a-54f2-8933-e6850777d963', 'certificado', 'Revisión anual de extintores', current_date - interval '8 months', 'Extintores Ficticios SL', current_date + interval '4 months', 'documentos/2026/9d6453ee-5b86-5eb9-8c8c-cbd701b881e4.pdf', 'extintores ultima.pdf', '97f7353b32ae557e09dfced1edcafdfa5c58037890b3b61b5ca0dd0ab24b99f9'),
   ('b52d98dc-5dac-52d5-9cdb-cef2682623d9', 'bf8db03c-259a-54f2-8933-e6850777d963', 'informe', 'Análisis de agua de consumo', current_date - interval '6 months', 'Laboratorio Ficticio', current_date + interval '6 months', 'documentos/2026/b52d98dc-5dac-52d5-9cdb-cef2682623d9.pdf', 'analisis agua.pdf', '35e0bafef95bc6f5bf08e451c87ba3f136067a38d3eb868116ed553b6f9a57bd');
 
 insert into public.documento_instalaciones (edificio_id, documento_id, instalacion_id) values

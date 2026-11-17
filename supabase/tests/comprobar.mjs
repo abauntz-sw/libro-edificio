@@ -102,6 +102,10 @@ const parteSimple = (inst, tipo, fecha = hoy, rev = null, prox = null) => db.que
 console.log('\nCarga')
 ok(await cuenta('select 1 from public.instalaciones') === 6, '6 instalaciones')
 ok(await cuenta('select 1 from public.documentos') === 12, '12 documentos')
+// Las fechas del ejemplo cuentan desde hoy: un año escrito a mano dejaría de cuadrar con ellas.
+ok(await cuenta(`select 1 from public.documentos
+  where titulo ~ '\\m(19|20)\\d\\d\\M' or nombre_original ~ '\\m(19|20)\\d\\d\\M'`) === 0,
+  'ningún título ni nombre de archivo del ejemplo lleva un año')
 ok(await cuenta('select 1 from public.partes') === 20, '20 partes')
 ok(await cuenta('select 1 from public.revisiones') === 4, '4 revisiones')
 ok((await filas(`select count(*) n from public.plantilla_revisiones where verificado`))[0].n == 0, 'ninguna periodicidad figura como verificada')
@@ -115,8 +119,21 @@ const sinRls = await filas(`select relname from pg_class c join pg_namespace n o
   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity`)
 ok(sinRls.length === 0, 'todas las tablas tienen seguridad por filas')
 ok(await cuenta(`select 1 from public.plantilla_revisiones where btrim(fuente) = ''`) === 0, 'toda periodicidad lleva su fuente')
+ok(await cuenta(`select 1 from public.plantilla_revisiones where fuente like '%425/2009%'`) === 0, 'ninguna fuente cita la Orden Foral 425/2009, que está derogada')
+ok(await cuenta(`select 1 from public.plantilla_revisiones where tipo_instalacion_id = 'gas' and periodicidad_meses = 60 and fuente like '%apartados 4.1 y 4.2%' and not verificado`) === 1, 'la revisión de gas cita sus apartados y sigue sin verificar')
 
 console.log('\nSin sesión')
+// Supabase da permiso a anon sobre cada tabla y función nueva. La primera migración se los quita,
+// pero solo a lo que había entonces. Esto avisa si una migración futura deja algo abierto.
+const abiertoAAnon = (await filas(`
+  select c.relname as nombre from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind in ('r', 'v', 'm', 'p')
+    and (has_table_privilege('anon', c.oid, 'select') or has_table_privilege('anon', c.oid, 'insert')
+      or has_table_privilege('anon', c.oid, 'update') or has_table_privilege('anon', c.oid, 'delete'))
+  union all
+  select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname in ('public', 'interno') and has_function_privilege('anon', p.oid, 'execute')`)).map(f => f.nombre)
+ok(abiertoAAnon.length === 0, `anon no tiene permiso sobre ninguna tabla ni función${abiertoAAnon.length ? `: ${abiertoAAnon.join(', ')}` : ''}`)
 await como('anon', async () => {
   for (const t of ['edificios', 'usuarios', 'documentos', 'partes', 'codigos_acceso', 'avisos']) {
     ok(await falla(() => filas(`select * from public.${t}`)), `anon no puede leer ${t}`)
@@ -157,6 +174,11 @@ await como('calor', async () => {
   ok(await cuenta('select 1 from public.partes where instalacion_id <> $1', [calefaccion]) === 0, 'empresa no ve partes ajenos')
   ok(await cuenta('select 1 from public.avisos where clase = $1 and referencia_id <> $2', ['revision', revCaldera]) === 0, 'avisos filtrados para la empresa')
 })
+// La función de archivos hace esta consulta antes de entregar un documento.
+const docCalefaccion = 'e4996b97-8d6e-5a5a-892c-2239c6bd3c94'
+const veDocumento = () => cuenta('select ruta from public.documentos where id = $1', [docCalefaccion])
+await como('calor', async () => ok(await veDocumento() === 1, 'empresa ve por su identificador un documento de su instalación'))
+await como('aguas', async () => ok(await veDocumento() === 0, 'empresa no ve un documento ajeno aunque conozca su identificador'))
 
 console.log('\nAccesos cerrados')
 await como('extintores', async () => ok(await cuenta('select 1 from public.instalaciones') === 0, 'código caducado no ve nada'))
@@ -214,7 +236,19 @@ await como('calor', async () => ok(await falla(() => archivar('99999999-9999-499
 await como('calor', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999995', null)), 'empresa no archiva con la lista vacía'))
 await como('guarda', async () => ok(await falla(() => archivar('99999999-9999-4999-8999-999999999994', [extintores])), 'guarda no archiva'))
 await como('guarda', async () => ok(await falla(() => db.query(`insert into public.documentos (edificio_id,tipo_id,titulo,fecha,ruta,nombre_original,sha256) values ('${edificio}','otro','x','2026-01-01','r','n',repeat('a',64))`)), 'nadie inserta documentos directamente'))
-const doc = await id('documentos', 'titulo', 'Revisión anual de extintores 2026')
+// Una ficha solo apunta a su propio documento. Si no, la función de archivos entregaría otro archivo del repositorio.
+const d6 = '99999999-9999-4999-8999-999999999996'
+const archivarEn = ruta => filas(`select public.registrar_documento(
+  $1, 'certificado', 'Prueba', '2026-11-06', 'Emisor', $2, 'a.pdf', repeat('a', 64), $3::uuid[]) as id`,
+  [d6, ruta, [calefaccion]])
+for (const ruta of ['indice/documentos.csv', 'README.md', `fotos/2026/${d6}.jpg`, `documentos/2026/${d1}.pdf`, `documentos/2026/../../indice/${d6}.pdf`]) {
+  await como('calor', async () => ok(await falla(() => archivarEn(ruta)), `empresa no archiva una ficha con la ruta ${ruta}`))
+}
+await como('calor', async () => {
+  await archivarEn(`documentos/2026/${d6}.docx`)
+  ok(await cuenta('select 1 from public.documentos where id = $1', [d6]) === 1, 'se archiva un documento que no es PDF')
+})
+const doc = await id('documentos', 'titulo', 'Revisión anual de extintores')
 await como('admin', async () => {
   await db.query('update public.documentos set eliminado_en = now() where id = $1', [doc])
   ok(await cuenta('select 1 from public.documentos where eliminado_en is not null') === 1, 'admin ve la papelera')
@@ -235,6 +269,22 @@ await como('admin', async () => {
 console.log('\nUsuarios')
 await como('admin', async () => {
   ok(await falla(() => db.query(`update public.usuarios set activo = false where perfil = 'admin'`)), 'no se puede dejar el edificio sin administración')
+})
+// Una caducidad pasada deja sin acceso igual que desactivar la cuenta.
+await como('admin', async () => {
+  ok(await falla(() => db.query(`update public.usuarios set acceso_caduca = current_date - 1 where perfil = 'admin'`)),
+    'la última persona administradora no se queda con el acceso caducado')
+})
+await como('admin', async () => {
+  await db.query(`insert into public.usuarios (edificio_id, nombre, perfil, acceso_caduca)
+    values ($1, 'Administración caducada', 'admin', current_date - 1)`, [edificio])
+  ok(await falla(() => db.query(`update public.usuarios set activo = false where nombre = 'Administración de Ejemplo'`)),
+    'una administradora con el acceso caducado no cuenta como otra')
+})
+await como('admin', async () => {
+  await db.query(`insert into public.usuarios (edificio_id, nombre, perfil) values ($1, 'Otra administración', 'admin')`, [edificio])
+  ok(!await falla(() => db.query(`update public.usuarios set acceso_caduca = current_date - 1 where nombre = 'Administración de Ejemplo'`)),
+    'con otra administradora en vigor, sí se puede poner caducidad')
 })
 await como('admin', async () => ok(await falla(() => db.query(`update public.usuarios set auth_id = null where perfil = 'guarda'`)), 'no se cambia el enlace de la sesión'))
 await como('guarda', async () => {
@@ -265,7 +315,7 @@ await como('admin', async () => {
     .map(a => `${a.clase} ${a.estado}: ${a.titulo}`)
   const esperados = [
     'documento vencido: Contrato de calefacción',
-    'documento pronto: Póliza de seguro 2026',
+    'documento pronto: Póliza de seguro',
     'revision vencido: Mantenimiento de generadores y equipos',
     'revision pronto: Revisión de extintores y equipos por el titular',
   ]

@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.119.0",
+    "@std/assert": "jsr:@std/assert@1.0.14"
+  },
+  "tasks": {
+    "tipos": "deno check index.ts tests/",
+    "test": "deno test tests/"
+  },
+  "lock": false
+}

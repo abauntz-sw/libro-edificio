@@ -7,9 +7,15 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261106000000_esquema_inicial.sql` | Crea las tablas, las reglas y los permisos |
 | `migrations/20261106000100_datos_comunes.sql` | Carga tipos y plantillas comunes a cualquier edificio |
 | `migrations/20261114000000_mas_tipos_y_revisiones.sql` | Añade accesos y salidas de emergencia, y las revisiones de gas y cocina |
+| `migrations/20261114000100_corrige_fuente_gas.sql` | Corrige la fuente de la revisión de gas, que citaba una orden foral derogada |
+| `migrations/20261115000000_ruta_de_documento.sql` | Obliga a que cada ficha apunte a su propio documento, en `documentos/` |
+| `migrations/20261115000100_ultimo_admin_con_caducidad.sql` | No deja el edificio sin administración por una fecha de caducidad |
+| `migrations/20261116000100_documento_repetido.sql` | Un identificador que ya existe solo se da por bueno si es el mismo archivo |
+| `migrations/20261116000200_permisos_cerrados_por_defecto.sql` | Hace que las tablas y funciones nuevas nazcan cerradas para la clave pública |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |
+| `functions/` | Funciones que se ejecutan en Supabase. Ver su [README](functions/README.md) |
 
 ## Probarlo sin cuenta
 
@@ -22,7 +28,7 @@ node supabase/tests/comprobar.mjs
 
 ## CI
 
-En cada push y Pull Request, GitHub ejecuta [`.github/workflows/base-de-datos.yml`](../.github/workflows/base-de-datos.yml):
+En cada Pull Request, y otra vez al entrar en `main`, GitHub ejecuta [`.github/workflows/base-de-datos.yml`](../.github/workflows/base-de-datos.yml):
 
 - **Permisos y reglas:** ejecuta `comprobar.mjs`. Si una comprobación falla, el CI sale en rojo y dice cuál.
 - **Migraciones:** aplica las migraciones y `seed.sql` con la CLI de Supabase, en el mismo Postgres que usa Supabase.
@@ -32,7 +38,7 @@ En cada push y Pull Request, GitHub ejecuta [`.github/workflows/base-de-datos.ym
 ## Probarlo en Supabase
 
 1. Crea un proyecto Free en [supabase.com](https://supabase.com/dashboard). Elige una región concreta de la UE, no la opción general «Europe».
-2. Abre **SQL Editor** y ejecuta, en este orden, las dos migraciones y `seed.sql`.
+2. Abre **SQL Editor** y ejecuta todas las migraciones de `supabase/migrations/`, por orden de nombre, y después `seed.sql`.
 3. Abre **Table Editor** para ver las tablas, o ejecuta:
 
 ```sql
@@ -50,5 +56,6 @@ Para repetir la carga, crea un proyecto nuevo o restablece el actual. `seed.sql`
 - **Clave pública:** puede estar en la aplicación. Sin un usuario activo no da acceso a nada.
 - **Cambios de tablas:** cada cambio es una migración nueva. No edites una que ya esté aplicada.
 - **Permisos:** todo cambio de permisos lleva su comprobación en `tests/comprobar.mjs`.
-- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo.
+- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo. Su ruta es siempre `documentos/AAAA/<id>.<extensión>`: una ficha no puede apuntar a otro archivo del repositorio.
+- **Tablas y funciones nuevas:** nacen cerradas para la clave pública, y las funciones no las puede ejecutar nadie más que su dueño. Cada migración que cree una debe dar solo los permisos necesarios, por ejemplo `grant execute ... to authenticated`. Las tablas nuevas de `public` siguen abiertas por defecto para `authenticated`: la seguridad por filas manda. `comprobar.mjs` avisa si algo queda abierto a la clave pública.
 - **Partes:** no se cambian ni se borran. Una corrección es un parte nuevo.

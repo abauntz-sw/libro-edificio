@@ -1,9 +1,12 @@
-# Comprueba la base de datos en cada push y en cada Pull Request.
+# Comprueba la base de datos en cada Pull Request y al entrar en main.
 # Si una comprobación falla, el CI sale en rojo y dice cuál.
 name: Base de datos
 
+# El push solo en main: en una rama con PR, el pull_request ya lo comprueba.
+# Con push en todas las ramas, cada cambio de un PR se comprobaría dos veces.
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -38,5 +41,23 @@ jobs:
           echo "Partes cargados: $n"
           if [ "$n" != "20" ]; then
             echo "::error title=Seed no cargado::Hay $n partes y se esperaban 20"
+            exit 1
+          fi
+      # Con los roles de verdad de Supabase: lo que cree una migración futura nace cerrado para anon.
+      # Crea una tabla y una función como postgres, que es quien aplica las migraciones. Este Postgres se tira al acabar.
+      - name: Comprueba que lo nuevo nace cerrado para la clave pública
+        run: |
+          # -q: sin los avisos «CREATE TABLE». Sale «anon|authenticated»: se espera f|t.
+          # Que authenticated sí tenga permiso demuestra que Supabase sigue dando los suyos por defecto,
+          # así que el «f» de anon se debe a la migración y no a que no se dé nada a nadie.
+          r=$(psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -qtAc "
+            create table public.prueba_nueva (id int);
+            create function public.prueba_funcion() returns int language sql as 'select 1';
+            select has_table_privilege('anon', 'public.prueba_nueva', 'select, insert, update, delete')
+                or has_function_privilege('anon', 'public.prueba_funcion()', 'execute'),
+              has_table_privilege('authenticated', 'public.prueba_nueva', 'select');")
+          echo "anon | authenticated: $r"
+          if [ "$r" != "f|t" ]; then
+            echo "::error title=Permisos por defecto::Se esperaba f|t (anon sin permiso, authenticated con él) y sale $r"
             exit 1
           fi

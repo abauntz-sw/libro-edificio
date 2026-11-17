@@ -5,3 +5,9 @@ supabase/.temp/
 dist-e2e/
 test-results/
 playwright-report/
+# Claves privadas, como la de la GitHub App. Van en los secretos de Supabase, nunca aquí.
+*.pem
+
+# Por si acaso: tandas de preparar y listados de escanear, que pueden llevar documentos reales.
+herramientas/Escaneos*/
+herramientas/*.csv

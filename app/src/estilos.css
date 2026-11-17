@@ -1,0 +1,71 @@
+/* Colores, letras y formas del prototipo. En móvil todo va en una columna. */
+:root {
+  --bg: #eef1f2; --sup: #ffffff; --fg: #18272e; --suave: #51636c; --linea: #c9d2d6;
+  --pino: #1d5c4d; --pino-fg: #ffffff;
+  --crit: #b3261e;
+  --display: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --cuerpo: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12191d; --sup: #1b252a; --fg: #e6edef; --suave: #a0b0b7; --linea: #35444b;
+    --pino: #5cc2a6; --pino-fg: #0d211b;
+    --crit: #ff9f96;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  /* La página ocupa al menos toda la pantalla, para poder centrar la entrada. */
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font: 400 16px/1.5 var(--cuerpo);
+  /* Deja sitio a la muesca y a la barra del móvil cuando la app está instalada. */
+  padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+}
+#raiz { flex: 1; display: flex; flex-direction: column; }
+
+h1 { font: 700 36px/1.1 var(--display); margin: 0; text-wrap: balance; }
+p { margin: 0; }
+:focus-visible { outline: 2px solid var(--pino); outline-offset: 2px; }
+
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.ancho { width: 100%; max-width: 1120px; margin-inline: auto; }
+.pila { display: grid; gap: 12px; min-width: 0; }
+.fila { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.suave { color: var(--suave); }
+.peq { font-size: 14px; }
+.error { color: var(--crit); }
+
+/* Cabecera */
+header { background: var(--sup); border-bottom: 1px solid var(--linea); }
+.cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-block: 10px; }
+.marca { min-width: 0; flex: 1 1 220px; }
+.marca b { font: 700 24px/1.1 var(--display); letter-spacing: .01em; display: block; }
+.marca span { color: var(--suave); font-size: 14px; }
+
+main { padding-block: 24px 56px; }
+
+/* Pantallas de un solo bloque: entrada, esperas y avisos */
+.centro { flex: 1; display: grid; place-items: center; padding: 24px 16px; }
+.tarjeta { width: 100%; max-width: 380px; background: var(--sup); border: 1px solid var(--linea); border-radius: 4px; padding: 24px; }
+
+/* Formularios */
+.campo { display: grid; gap: 4px; font-weight: 600; }
+input {
+  font: inherit; color: var(--fg); background: var(--sup);
+  border: 1px solid var(--linea); border-radius: 4px; padding: 10px; width: 100%;
+}
+.btn {
+  font: 600 16px/1.2 var(--cuerpo); color: var(--fg); background: var(--sup);
+  border: 1px solid var(--linea); border-radius: 4px; padding: 9px 14px; cursor: pointer;
+}
+.btn.prim { background: var(--pino); border-color: var(--pino); color: var(--pino-fg); }
+.btn.grande { font-size: 18px; padding: 14px 18px; width: 100%; }
+.btn:disabled { opacity: .6; cursor: default; }

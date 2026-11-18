@@ -13,6 +13,7 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261116000000_exportar_indice.sql` | Prepara los CSV del índice para la exportación diaria. Solo los pide la función `exportar` |
 | `migrations/20261116000100_documento_repetido.sql` | Un identificador que ya existe solo se da por bueno si es el mismo archivo |
 | `migrations/20261116000200_permisos_cerrados_por_defecto.sql` | Hace que las tablas y funciones nuevas nazcan cerradas para la clave pública |
+| `migrations/20261118000000_fotos_de_parte.sql` | Una foto de un parte solo apunta a su propio archivo, en `fotos/`. Añade `puedo_adjuntar_foto`, para la función de archivos |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |

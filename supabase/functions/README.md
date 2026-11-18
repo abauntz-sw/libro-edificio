@@ -115,7 +115,13 @@ En el panel de Supabase: **Edge Functions → Secrets**.
 - `GITHUB_APP_ID`: el App ID.
 - `GITHUB_APP_PRIVATE_KEY`: todo el contenido del archivo `.pem`, con sus líneas de «BEGIN» y «END».
 
-Si los pones con la herramienta `supabase secrets set` en vez del panel, la clave de varias líneas puede quedarse solo con la primera. La función avisa con «La clave privada de la GitHub App está vacía o no es un PEM». Pásala en una sola línea, con los saltos escritos como `\n`, con `--env-file`. La función los entiende.
+Si los pones con la herramienta `supabase secrets set` en vez del panel, la clave de varias líneas puede quedarse solo con la primera. La función avisa con «La clave privada de la GitHub App está vacía o no es un PEM». Pásala en una sola línea, con los saltos escritos como `\n`, con `--env-file`. La función los entiende:
+
+```bash
+npx -y supabase@3.1.0 secrets set --env-file <archivo-fuera-del-repositorio> --remote=<referencia-del-proyecto>
+```
+
+Para ver qué secretos tiene el proyecto: `secrets list`. Solo enseña los nombres y una huella, no los valores.
 
 Después borra el `.pem` del ordenador. Si se pierde, se crea otra clave en la App y se borra la anterior.
 
@@ -124,9 +130,13 @@ Después borra el `.pem` del ordenador. Si se pierde, se crea otra clave en la A
 Desde la raíz del repositorio:
 
 ```bash
-npx supabase login
-npx supabase functions deploy archivos --project-ref <referencia-del-proyecto>
+npx -y supabase@3.1.0 login
+npx -y supabase@3.1.0 functions deploy archivos --remote=<referencia-del-proyecto> --use-api
 ```
+
+`--remote=` elige el proyecto. Sin él, va al enlazado con `supabase link`. La opción antigua, `--project-ref`, todavía funciona, pero la CLI avisa de que se quitará. `--use-api` prepara la función en Supabase, así no hace falta Docker en el ordenador.
+
+Para ver qué funciones tiene el proyecto: `npx -y supabase@3.1.0 functions list --remote=<referencia-del-proyecto>`.
 
 ### 5. Probarla
 
@@ -192,7 +202,7 @@ Hace falta la GitHub App de `archivos`, con sus secretos. `exportar` usa los mis
 **1. Publicarla.** Desde la raíz del repositorio:
 
 ```bash
-npx supabase functions deploy exportar --project-ref <referencia-del-proyecto>
+npx -y supabase@3.1.0 functions deploy exportar --remote=<referencia-del-proyecto> --use-api
 ```
 
 **2. Las extensiones.** En el panel: **Database → Extensions**. Activa `pg_cron`, que lanza tareas a una hora, y `pg_net`, que deja a la base de datos hacer peticiones a una dirección.

@@ -51,6 +51,32 @@ Las fechas del ejemplo cuentan desde el día de carga, así que cualquier día s
 
 Para repetir la carga, crea un proyecto nuevo o restablece el actual. `seed.sql` no se puede ejecutar dos veces.
 
+## Poner al día un proyecto con la CLI
+
+Así se aplican las migraciones nuevas de `main` a un proyecto que ya existe, como `libro-dev`, sin vaciarlo. Se usa la versión 3 de la CLI de Supabase. Desde la raíz del repositorio, con `main` al día:
+
+```bash
+npx -y supabase@3.1.0 login
+npx -y supabase@3.1.0 link <referencia-del-proyecto>
+npx -y supabase@3.1.0 db push --remote --dry-run
+npx -y supabase@3.1.0 db push --remote
+```
+
+`--dry-run` solo enseña qué migraciones aplicaría, sin tocar nada. Míralo antes de aplicar.
+
+**Ojo con `--remote`.** Desde la versión 3, las órdenes `db` trabajan por defecto con la base de datos del ordenador. Sin `--remote`, `db push` no toca el proyecto de Supabase. Con `--remote` va al proyecto enlazado con `link`. Las órdenes `functions` y `secrets` van siempre al proyecto.
+
+**Cuándo hace falta `--include-all`.** `db push` se niega a aplicar una migración con fecha anterior a la última que ya tiene el proyecto. Pasa cuando dos ramas crean migraciones a la vez y entran en `main` en otro orden. Por ejemplo: `20261116000000_exportar_indice.sql` entró en `main` después de `20261116000100` y `20261116000200`, y `libro-dev` ya tenía esas dos. Con `--include-all` la aplica igualmente:
+
+```bash
+npx -y supabase@3.1.0 db push --remote --include-all --dry-run
+npx -y supabase@3.1.0 db push --remote --include-all
+```
+
+Esa migración se aplica después de otras más nuevas. Antes de usarlo, comprueba que no dependa de que esas otras no estén.
+
+Para ver qué tiene apuntado el proyecto: `npx -y supabase@3.1.0 migration list --remote`.
+
 ## Reglas
 
 - **Clave de servicio:** salta todos los permisos. Va solo en los secretos de las funciones de Supabase, nunca en el navegador, el móvil ni el ordenador de la oficina.

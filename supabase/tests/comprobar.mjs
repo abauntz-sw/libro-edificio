@@ -416,6 +416,51 @@ await comoServicio(async () => {
   ok(inst.includes(`;"'=HIPERVINCULO(""x"")";`), 'un texto que empieza por = lleva un apóstrofo delante, para que Excel no lo tome por fórmula')
 })
 
+console.log('\nFotos de los partes')
+// Va al final porque guarda un parte: antes cambiaría los recuentos de la exportación.
+const parteConFotos = '88888888-8888-4888-8888-888888888801'
+const foto1 = '88888888-8888-4888-8888-888888888811'
+const foto2 = '88888888-8888-4888-8888-888888888812'
+const rutaFoto = f => `fotos/2026/${f}.jpg`
+const ponerFoto = (f, ruta = rutaFoto(f), p = parteConFotos) => db.query(
+  `insert into public.parte_fotos (id, edificio_id, parte_id, ruta, sha256) values ($1, $2, $3, $4, repeat('c', 64))`,
+  [f, edificio, p, ruta])
+const puedoAdjuntar = async (p = parteConFotos) => (await filas('select public.puedo_adjuntar_foto($1) as si', [p]))[0].si
+
+await como('guarda', async () => {
+  await db.query(`insert into public.partes (id, edificio_id, instalacion_id, fecha, tipo, descripcion)
+    values ($1, $2, $3, $4, 'comprobacion', 'Con fotos')`, [parteConFotos, edificio, extintores, hoy])
+  ok(await puedoAdjuntar() === true, 'quien escribió el parte puede adjuntarle fotos')
+  await ponerFoto(foto1)
+  ok(await cuenta('select 1 from public.parte_fotos where id = $1', [foto1]) === 1, 'y la foto queda apuntada')
+}, { guardar: true })
+await como('guarda', async () => {
+  // Cada caso con su propio identificador: si uno entrara por error, no haría fallar a los siguientes.
+  const rutas = [
+    f => rutaFoto(foto1),
+    f => 'indice/partes.csv',
+    f => `documentos/2026/${f}.pdf`,
+    f => `fotos/2026/${f}.png`,
+    f => `fotos/2026/../${f}.jpg`,
+  ]
+  for (const [i, ruta] of rutas.entries()) {
+    const f = `88888888-8888-4888-8888-88888888882${i}`
+    ok(await falla(() => ponerFoto(f, ruta(f))), `una foto no apunta a ${ruta('<id>')}`)
+  }
+  ok(await puedoAdjuntar('88888888-8888-4888-8888-888888888899') === false, 'no se adjuntan fotos a un parte que no existe')
+  ok(await falla(() => db.query('update public.parte_fotos set ruta = $1', [rutaFoto(foto2)])), 'una foto no se cambia')
+  ok(await falla(() => db.query('delete from public.parte_fotos')), 'una foto no se borra')
+})
+for (const quien of ['admin', 'consulta', 'calor']) {
+  await como(quien, async () => {
+    ok(await puedoAdjuntar() === false, `${quien} no adjunta fotos a un parte que no es suyo`)
+    ok(await falla(() => ponerFoto(foto2)), `${quien} no puede apuntar una foto en un parte ajeno`)
+  })
+}
+await como('anon', async () => ok(await falla(() => puedoAdjuntar()), 'sin sesión no se puede preguntar puedo_adjuntar_foto'))
+await como('admin', async () => ok(await cuenta('select 1 from public.parte_fotos where id = $1', [foto1]) === 1, 'la administración ve la foto'))
+await como('calor', async () => ok(await cuenta('select 1 from public.parte_fotos where id = $1', [foto1]) === 0, 'una empresa no ve la foto de una instalación ajena'))
+
 console.log(`\n${total - fallos} de ${total} comprobaciones correctas`)
 if (fallos) console.log(`\nHan fallado:\n${fallidas.map(t => `- ${t}`).join('\n')}`)
 await db.close()

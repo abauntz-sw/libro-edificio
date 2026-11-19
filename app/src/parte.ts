@@ -1,12 +1,17 @@
-// Registrar un parte de trabajo (tarea 1.6, sin fotos ni certificado todavía).
+// Registrar un parte de trabajo (tarea 1.6, sin fotos todavía).
 //
 // El parte se inserta en la tabla `partes`. La base de datos pone sola el edificio, el autor y la empresa,
 // y comprueba que cada perfil registre solo lo suyo. Si el parte cierra una revisión, la base de datos
 // mueve su próxima fecha. Aquí solo se ofrece a cada uno lo que puede elegir, para no llevarle a un error.
+//
+// El certificado, si lo hay, es un PDF que se archiva como documento con la función «archivos»,
+// antes que el parte: el parte lo apunta en `certificado_id`, y la base de datos no deja apuntar
+// un documento que todavía no existe.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Perfil } from './acceso.ts'
 import { clasificar, type Resultado } from './cola.ts'
+import { comprobarArchivo } from './subida.ts'
 
 export type TipoParte = 'preventivo' | 'correctivo' | 'inspeccion' | 'urgencia' | 'comprobacion' | 'incidencia'
 
@@ -95,7 +100,7 @@ export function faltaEnParte(b: Borrador, revision: Revision | undefined, hoy: s
 }
 
 /** La fila que se inserta. El identificador lo crea el móvil, así reenviar el parte no lo duplica. */
-export function filaParte(id: string, b: Borrador, revision: Revision | undefined, hoy: string) {
+export function filaParte(id: string, b: Borrador, revision: Revision | undefined, hoy: string, certificadoId: string | null = null) {
   return {
     id,
     instalacion_id: b.instalacion,
@@ -105,6 +110,77 @@ export function filaParte(id: string, b: Borrador, revision: Revision | undefine
     revision_id: revision?.id ?? null,
     // La próxima fecha solo se manda si la revisión no tiene periodicidad. Si la tiene, la calcula la base de datos.
     proxima_revision: revision && revision.periodicidad_meses === null ? b.proxima : null,
+    certificado_id: certificadoId,
+  }
+}
+
+/** El certificado de un parte, tal como se guarda en el móvil hasta que llega. */
+export interface Certificado {
+  /** El identificador del documento. Se crea al elegir el archivo: si el envío se repite, no se duplica. */
+  id: string
+  /** Una copia del PDF. Así sigue ahí aunque el archivo original se mueva o se borre del móvil. */
+  archivo: Blob
+  nombre: string
+  titulo: string
+  fecha: string
+  instalacion: string
+}
+
+/**
+ * Quién puede adjuntar un certificado: la administración y las empresas, como en el prototipo.
+ * La guarda no archiva documentos (`puedo_archivar`), y la consulta no registra partes.
+ */
+export const puedeAdjuntarCertificado = (perfil: Perfil) => perfil === 'admin' || perfil === 'empresa'
+
+/** El título del certificado en el Archivo. Corto y con lo que lo distingue: qué se hizo y dónde. */
+export function tituloCertificado(tipo: TipoParte, instalacion: string): string {
+  return `Certificado: ${NOMBRE_TIPO[tipo].toLowerCase()} en ${instalacion}`.slice(0, 200)
+}
+
+/**
+ * Prepara el certificado elegido. Devuelve por qué no vale (vacío, demasiado grande o no es un PDF)
+ * o una copia del archivo.
+ */
+export async function leerCertificado(archivo: File): Promise<{ error: string } | { copia: Blob }> {
+  const error = await comprobarArchivo(archivo)
+  if (error) return { error }
+  return { copia: new Blob([await archivo.arrayBuffer()], { type: 'application/pdf' }) }
+}
+
+/** El formulario que espera la función «archivos»: un documento de tipo certificado, de la instalación del parte. */
+export function formularioCertificado(c: Certificado): FormData {
+  const datos = new FormData()
+  datos.append('archivo', c.archivo, c.nombre)
+  datos.append('id', c.id)
+  datos.append('tipo', 'certificado')
+  datos.append('titulo', c.titulo)
+  datos.append('fecha', c.fecha)
+  datos.append('instalaciones', c.instalacion)
+  return datos
+}
+
+/**
+ * Decide si un fallo de la función «archivos» es pasajero o definitivo, como `clasificar` con la base de datos.
+ * Sin respuesta, es la red. 401 es la sesión, que se renueva sola; 408, 429 y los 5xx, el servidor.
+ * El resto (sin permiso, no es un PDF, demasiado grande) no se arregla reintentando.
+ */
+export async function clasificarFuncion(error: unknown): Promise<Resultado> {
+  const respuesta: unknown = (error as { context?: unknown } | null)?.context
+  if (!(respuesta instanceof Response)) return { tipo: 'sin-conexion' }
+  const { status } = respuesta
+  if (status === 401 || status === 408 || status === 429 || status >= 500) return { tipo: 'sin-conexion' }
+  const cuerpo = await respuesta.json().catch(() => null) as { error?: string } | null
+  return { tipo: 'rechazado', motivo: `El certificado no se ha podido archivar: ${cuerpo?.error ?? `la función respondió ${status}`}` }
+}
+
+/** Archiva el certificado. Si ya estaba (el mismo identificador y el mismo archivo), la función no hace nada. */
+export async function subirCertificado(supabase: SupabaseClient, c: Certificado): Promise<Resultado> {
+  try {
+    // Un PDF tarda más que un parte. Con poca cobertura se le dan 2 minutos.
+    const { error } = await supabase.functions.invoke('archivos', { body: formularioCertificado(c), timeout: 120_000 })
+    return error ? await clasificarFuncion(error) : { tipo: 'enviado' }
+  } catch {
+    return { tipo: 'sin-conexion' }
   }
 }
 
@@ -123,10 +199,15 @@ export async function leerDatosParte(supabase: SupabaseClient): Promise<{ instal
 export type FilaParte = ReturnType<typeof filaParte>
 
 /**
- * Envía el parte. Si ya había llegado (el mismo identificador), no hace nada: `on conflict do nothing`.
+ * Envía el parte, y antes su certificado si lo lleva. Si ya había llegado (el mismo identificador),
+ * no hace nada: `on conflict do nothing`.
  * Dice si ha llegado, si hay que reintentarlo más tarde o si la base de datos lo rechaza.
  */
-export async function enviarParte(supabase: SupabaseClient, fila: FilaParte): Promise<Resultado> {
+export async function enviarParte(supabase: SupabaseClient, fila: FilaParte, certificado?: Certificado): Promise<Resultado> {
+  if (certificado) {
+    const resultado = await subirCertificado(supabase, certificado)
+    if (resultado.tipo !== 'enviado') return resultado
+  }
   try {
     // Con una raya de cobertura, una petición puede quedarse colgada. A los 20 segundos se da por no llegada.
     // Si en realidad llegó, reenviarla no duplica nada.

@@ -67,7 +67,7 @@ El móvil envía primero el parte, con `insert` en la tabla `partes`, y después
 Pasos, en este orden:
 
 1. Comprueba que es un JPEG y que no pasa de 5 MB.
-2. Pregunta a la base de datos si esa persona puede añadir fotos a ese parte, con `puedo_adjuntar_foto`. Solo puede quien escribió el parte.
+2. Pregunta a la base de datos si esa persona puede añadir fotos a ese parte, con `puedo_adjuntar_foto`. Solo puede quien escribió el parte, y hasta 7 días después de que llegara (`recibido_en`). Pasado ese plazo, a quien escribió el parte se le dice: «Ese parte se recibió hace más de 7 días y ya no admite fotos». A los demás, lo de siempre: «No puedes añadir fotos a ese parte».
 3. Escribe la foto en `fotos/AAAA/<id>.jpg`. El año es el de la fecha del parte.
 4. La apunta en `parte_fotos`, con la sesión de esa persona.
 
@@ -87,7 +87,7 @@ Cuando algo no vale, responde un JSON con el motivo: `{"error": "El archivo no e
 | 201 | Documento o foto guardados |
 | 400 | Falta algo o algo no vale |
 | 401 | No hay sesión o ha caducado |
-| 403 | Esa persona no puede archivar ahí, o no puede añadir fotos a ese parte |
+| 403 | Esa persona no puede archivar ahí, o no puede añadir fotos a ese parte (no es suyo o han pasado 7 días) |
 | 404 | El documento o la foto no existen, o no puede verlos |
 | 409 | Ese identificador ya es de otro archivo |
 | 413 | El documento pesa más de 25 MB, o la foto más de 5 MB |

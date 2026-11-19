@@ -22,6 +22,9 @@ import {
 import type { Almacen } from './github.ts'
 import type { Libro } from './libro.ts'
 
+/** Los días que hay para añadir fotos a un parte, desde que se recibe. La regla está en la base de datos. */
+const PLAZO_FOTOS_DIAS = 7
+
 export interface Piezas {
   /** Abre la base de datos con la sesión de quien llama. */
   libro(autorizacion: string): Libro
@@ -118,6 +121,10 @@ async function subirFoto(formulario: FormData, archivo: File, libro: Libro, piez
   const edificio = await libro.edificio()
   const fecha = edificio && await libro.fechaParte(parte)
   if (!edificio || !fecha || !(await libro.puedoAdjuntarFoto(parte))) {
+    // Solo a quien escribió el parte se le dice que es por el plazo.
+    if (edificio && fecha && await libro.fotoFueraDePlazo(parte)) {
+      throw new ErrorHttp(403, `Ese parte se recibió hace más de ${PLAZO_FOTOS_DIAS} días y ya no admite fotos.`)
+    }
     throw new ErrorHttp(403, 'No puedes añadir fotos a ese parte.')
   }
 
@@ -128,7 +135,10 @@ async function subirFoto(formulario: FormData, archivo: File, libro: Libro, piez
     return json(200, { id, ruta: previa.ruta, sha256: huella, yaEstaba: true })
   }
 
-  // Si el identificador es de una foto que esta persona no ve, GitHub no deja pisar el archivo: responde 409.
+  // Si el identificador es de una foto que esta persona no ve, se responde 409 de una de dos formas.
+  // Si la ruta es la misma, GitHub no deja pisar el archivo. Si es otra (un parte de otro año),
+  // GitHub guarda el archivo y la base de datos rechaza el identificador repetido: queda un archivo suelto,
+  // que no hace daño. Solo pasa si alguien manipula el móvil.
   const ruta = rutaFoto(id, fecha)
   const escrito = await piezas.almacen().escribir(edificio.repositorio, ruta, bytes, `Añade la foto ${id}`)
 

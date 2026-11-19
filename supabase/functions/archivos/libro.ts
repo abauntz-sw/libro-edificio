@@ -42,8 +42,10 @@ export interface Libro {
   registrar(registro: Registro): Promise<void>
   /** La fecha del parte, o null si no existe o si esa persona no puede verlo. */
   fechaParte(id: string): Promise<string | null>
-  /** Solo quien escribió el parte puede añadirle fotos. */
+  /** Solo quien escribió el parte puede añadirle fotos, y hasta 7 días después de recibirlo. */
   puedoAdjuntarFoto(parte: string): Promise<boolean>
+  /** Si quien escribió el parte ya no puede añadirle fotos por el plazo. A los demás, siempre false. */
+  fotoFueraDePlazo(parte: string): Promise<boolean>
   /** La foto, o null si no existe o si esa persona no puede verla. */
   foto(id: string): Promise<FotoGuardada | null>
   registrarFoto(registro: RegistroFoto): Promise<void>
@@ -131,6 +133,12 @@ export function crearLibro(url: string, clavePublica: string, autorizacion: stri
       return data === true
     },
 
+    async fotoFueraDePlazo(parte) {
+      const { data, error, status } = await cliente.rpc('foto_fuera_de_plazo', { p_parte: parte })
+      if (error) fallo(error, status)
+      return data === true
+    },
+
     async foto(id) {
       const { data, error, status } = await cliente
         .from('parte_fotos').select('ruta, sha256, parte_id').eq('id', id).maybeSingle()
@@ -148,6 +156,8 @@ export function crearLibro(url: string, clavePublica: string, autorizacion: stri
         ruta: registro.ruta,
         sha256: registro.sha256,
       })
+      // 23505: ya hay una foto con ese identificador, que esta persona no ve (si la viera, se habría visto antes).
+      if (error?.code === '23505') throw new ErrorHttp(409, 'Ya hay otra foto con ese identificador.')
       if (error) fallo(error, status, 'No puedes añadir fotos a ese parte.')
     },
   }

@@ -12,6 +12,8 @@ const PDF = new TextEncoder().encode('%PDF-1.7 documento ficticio')
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new TextEncoder().encode('foto ficticia')])
 const PARTE_GUARDA = 'aaaaaaaa-0000-4000-8000-000000000001'
 const PARTE_CALOR = 'aaaaaaaa-0000-4000-8000-000000000002'
+const PARTE_EXTINTORES = 'aaaaaaaa-0000-4000-8000-000000000003'
+const PARTE_VIEJO = 'aaaaaaaa-0000-4000-8000-000000000004'
 const FOTO = 'bbbbbbbb-0000-4000-8000-000000000001'
 
 type Perfil = 'admin' | 'guarda' | 'calor' | 'extintores'
@@ -25,10 +27,13 @@ function edificioDeMentira() {
   const archivos = new Map<string, Uint8Array>()
   const fallos = { registrar: 0, registrarFoto: 0 }
   const instalacionDe: Partial<Record<Perfil, string>> = { calor: CALDERA, extintores: EXTINTORES }
-  // Dos partes: uno del guarda, en los extintores, y otro de la empresa de la caldera, del año pasado.
-  const partes = new Map<string, { fecha: string; autor: Perfil; instalacion: string }>([
+  // Uno del guarda y otro de la empresa de extintores, en los extintores, y otro de la caldera, del año pasado.
+  // El último, del guarda, se recibió hace más de 7 días: ya no admite fotos.
+  const partes = new Map<string, { fecha: string; autor: Perfil; instalacion: string; fueraDePlazo?: true }>([
     [PARTE_GUARDA, { fecha: '2026-11-18', autor: 'guarda', instalacion: EXTINTORES }],
     [PARTE_CALOR, { fecha: '2025-12-30', autor: 'calor', instalacion: CALDERA }],
+    [PARTE_EXTINTORES, { fecha: '2026-11-18', autor: 'extintores', instalacion: EXTINTORES }],
+    [PARTE_VIEJO, { fecha: '2026-11-02', autor: 'guarda', instalacion: EXTINTORES, fueraDePlazo: true }],
   ])
   const fotos = new Map<string, FotoGuardada>()
   // Como veo_parte: administración y guarda ven todos los partes; una empresa, los de su instalación.
@@ -56,7 +61,8 @@ function edificioDeMentira() {
       return Promise.resolve()
     },
     fechaParte: id => Promise.resolve(veParte(perfil, id) ? partes.get(id)!.fecha : null),
-    puedoAdjuntarFoto: id => Promise.resolve(partes.get(id)?.autor === perfil),
+    puedoAdjuntarFoto: id => Promise.resolve(partes.get(id)?.autor === perfil && !partes.get(id)?.fueraDePlazo),
+    fotoFueraDePlazo: id => Promise.resolve(partes.get(id)?.autor === perfil && partes.get(id)?.fueraDePlazo === true),
     foto: id => {
       const foto = fotos.get(id)
       return Promise.resolve(foto && veParte(perfil, foto.parte) ? foto : null)
@@ -64,7 +70,10 @@ function edificioDeMentira() {
     registrarFoto: registro => {
       if (fallos.registrarFoto-- > 0) return Promise.reject(new Error('la base de datos no responde'))
       if (partes.get(registro.parte)?.autor !== perfil) return Promise.reject(new ErrorHttp(403, 'No puedes añadir fotos a ese parte.'))
-      if (!fotos.has(registro.id)) fotos.set(registro.id, { ruta: registro.ruta, sha256: registro.sha256, parte: registro.parte })
+      // Como la clave primaria: un identificador repetido se rechaza, aunque sea de una foto que no se ve.
+      const previa = fotos.get(registro.id)
+      if (previa && previa.ruta !== registro.ruta) return Promise.reject(new ErrorHttp(409, 'Ya hay otra foto con ese identificador.'))
+      if (!previa) fotos.set(registro.id, { ruta: registro.ruta, sha256: registro.sha256, parte: registro.parte })
       return Promise.resolve()
     },
   })
@@ -358,6 +367,29 @@ Deno.test('nadie más añade fotos a un parte, y no se escribe nada', async () =
   assertEquals(inexistente.status, 403)
   assertEquals(await ajeno.text(), await inexistente.text())
   assertEquals([edificio.archivos.size, edificio.fotos.size], [0, 0])
+})
+
+Deno.test('pasados 7 días no se añaden fotos, y solo a quien escribió el parte se le dice por qué', async () => {
+  const edificio = edificioDeMentira()
+  const propia = await edificio.subirFoto('guarda', { parte: PARTE_VIEJO })
+  assertEquals(propia.status, 403)
+  assertEquals((await propia.json()).error, 'Ese parte se recibió hace más de 7 días y ya no admite fotos.')
+
+  // La empresa de extintores ve el parte, pero no es suyo: recibe el mensaje de siempre.
+  const ajena = await edificio.subirFoto('extintores', { parte: PARTE_VIEJO })
+  assertEquals(ajena.status, 403)
+  assertEquals((await ajena.json()).error, 'No puedes añadir fotos a ese parte.')
+  assertEquals([edificio.archivos.size, edificio.fotos.size], [0, 0])
+})
+
+Deno.test('el identificador de una foto que no se ve, en un parte de otro año, responde 409 y no 500', async () => {
+  const edificio = edificioDeMentira()
+  assertEquals((await edificio.subirFoto('calor', { parte: PARTE_CALOR })).status, 201)
+  // La empresa de extintores no ve esa foto, y su parte es de 2026: la ruta es otra.
+  const repetida = await edificio.subirFoto('extintores', { parte: PARTE_EXTINTORES })
+  assertEquals(repetida.status, 409)
+  assertEquals((await repetida.json()).error, 'Ya hay otra foto con ese identificador.')
+  assertEquals(edificio.fotos.get(FOTO)?.parte, PARTE_CALOR)
 })
 
 Deno.test('rechaza una foto que no vale antes de escribir nada', async () => {

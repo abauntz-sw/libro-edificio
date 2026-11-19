@@ -56,6 +56,43 @@ export function esPdf(bytes: Uint8Array): boolean {
   return firma.every((byte, i) => bytes[i] === byte)
 }
 
+/** Tamaño máximo de una foto. El móvil las comprime antes de enviarlas: así una foto normal pesa menos de 1 MB. */
+export const LIMITE_FOTO_BYTES = 5 * 1024 * 1024
+
+/** Un JPEG empieza siempre por FF D8 FF. El móvil manda las fotos en JPEG después de comprimirlas. */
+export function esJpeg(bytes: Uint8Array): boolean {
+  return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+}
+
+/** Ruta de una foto dentro del repositorio del edificio. El año es el del parte. */
+export const rutaFoto = (id: string, fechaParte: string) => `fotos/${fechaParte.slice(0, 4)}/${id}.jpg`
+
+/** Dice si una ruta es la de esa foto: fotos/AAAA/<id>.jpg. La base de datos tiene la misma regla. */
+export function esRutaDeFoto(ruta: string, id: string): boolean {
+  return esUuid(id) && new RegExp(`^fotos/[0-9]{4}/${id}\\.jpg$`).test(ruta)
+}
+
+/** Los datos de una foto: su identificador, creado por el móvil, y el del parte al que va. */
+export interface DatosFoto {
+  id: string
+  parte: string
+}
+
+/** Lee el identificador de la foto y el de su parte. Si alguno no vale, lanza un ErrorHttp 400. */
+export function leerFoto(formulario: FormData): DatosFoto {
+  const uuid = (campo: string) => {
+    const valor = formulario.get(campo)
+    return typeof valor === 'string' ? valor.trim().toLowerCase() : ''
+  }
+  const id = uuid('id')
+  const parte = uuid('parte')
+  const fallos: string[] = []
+  if (!esUuid(id)) fallos.push('falta el identificador de la foto')
+  if (!esUuid(parte)) fallos.push('falta el identificador del parte')
+  if (fallos.length > 0) throw new ErrorHttp(400, `Revisa la foto: ${fallos.join('; ')}.`)
+  return { id, parte }
+}
+
 /** Huella SHA-256 de un archivo, en hexadecimal. */
 export async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const huella = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))

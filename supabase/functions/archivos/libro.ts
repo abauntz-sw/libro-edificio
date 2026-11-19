@@ -18,6 +18,17 @@ export interface Registro extends Ficha {
   commit: string | null
 }
 
+export interface FotoGuardada { ruta: string; sha256: string; parte: string }
+
+/** Lo que se apunta de una foto al registrarla. */
+export interface RegistroFoto {
+  id: string
+  edificio: string
+  parte: string
+  ruta: string
+  sha256: string
+}
+
 /** La base de datos, vista por una persona. Los tests usan una de mentira. */
 export interface Libro {
   /** El edificio de quien llama, o null si su cuenta no tiene acceso. */
@@ -29,6 +40,15 @@ export interface Libro {
   /** El documento, o null si no existe o si esa persona no puede verlo. */
   documento(id: string): Promise<DocumentoGuardado | null>
   registrar(registro: Registro): Promise<void>
+  /** La fecha del parte, o null si no existe o si esa persona no puede verlo. */
+  fechaParte(id: string): Promise<string | null>
+  /** Solo quien escribió el parte puede añadirle fotos, y hasta 7 días después de recibirlo. */
+  puedoAdjuntarFoto(parte: string): Promise<boolean>
+  /** Si quien escribió el parte ya no puede añadirle fotos por el plazo. A los demás, siempre false. */
+  fotoFueraDePlazo(parte: string): Promise<boolean>
+  /** La foto, o null si no existe o si esa persona no puede verla. */
+  foto(id: string): Promise<FotoGuardada | null>
+  registrarFoto(registro: RegistroFoto): Promise<void>
 }
 
 interface Fallo { code?: string; message: string }
@@ -40,13 +60,13 @@ export function crearLibro(url: string, clavePublica: string, autorizacion: stri
   })
 
   /** Convierte un fallo de la base de datos en un error con su código HTTP. */
-  function fallo(error: Fallo, estado: number): never {
+  function fallo(error: Fallo, estado: number, sinPermiso = 'No tienes permiso para archivar este documento.'): never {
     // 401 o PGRST301/PGRST303: la sesión no vale o ha caducado.
     if (estado === 401 || error.code === 'PGRST301' || error.code === 'PGRST303') {
       throw new ErrorHttp(401, 'La sesión ha caducado. Vuelve a entrar.')
     }
     // 42501: la base de datos dice que no hay permiso.
-    if (error.code === '42501') throw new ErrorHttp(403, 'No tienes permiso para archivar este documento.')
+    if (error.code === '42501') throw new ErrorHttp(403, sinPermiso)
     throw new Error(`La base de datos ha fallado (${error.code ?? estado}): ${error.message}`)
   }
 
@@ -99,6 +119,46 @@ export function crearLibro(url: string, clavePublica: string, autorizacion: stri
         p_commit_sha: registro.commit,
       })
       if (error) fallo(error, status)
+    },
+
+    async fechaParte(id) {
+      const { data, error, status } = await cliente.from('partes').select('fecha').eq('id', id).maybeSingle()
+      if (error) fallo(error, status)
+      return data?.fecha ?? null
+    },
+
+    async puedoAdjuntarFoto(parte) {
+      const { data, error, status } = await cliente.rpc('puedo_adjuntar_foto', { p_parte: parte })
+      if (error) fallo(error, status)
+      return data === true
+    },
+
+    async fotoFueraDePlazo(parte) {
+      const { data, error, status } = await cliente.rpc('foto_fuera_de_plazo', { p_parte: parte })
+      if (error) fallo(error, status)
+      return data === true
+    },
+
+    async foto(id) {
+      const { data, error, status } = await cliente
+        .from('parte_fotos').select('ruta, sha256, parte_id').eq('id', id).maybeSingle()
+      if (error) fallo(error, status)
+      return data && { ruta: data.ruta, sha256: data.sha256, parte: data.parte_id }
+    },
+
+    async registrarFoto(registro) {
+      // Un insert directo: la política de parte_fotos comprueba que el parte sea de quien llama,
+      // y la regla de la tabla, que la ruta sea la de esa foto.
+      const { error, status } = await cliente.from('parte_fotos').insert({
+        id: registro.id,
+        edificio_id: registro.edificio,
+        parte_id: registro.parte,
+        ruta: registro.ruta,
+        sha256: registro.sha256,
+      })
+      // 23505: ya hay una foto con ese identificador, que esta persona no ve (si la viera, se habría visto antes).
+      if (error?.code === '23505') throw new ErrorHttp(409, 'Ya hay otra foto con ese identificador.')
+      if (error) fallo(error, status, 'No puedes añadir fotos a ese parte.')
     },
   }
 }

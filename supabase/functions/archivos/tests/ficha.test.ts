@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { ErrorHttp, esFecha, esPdf, esRutaDeDocumento, leerFicha, rutaDocumento, sha256 } from '../ficha.ts'
+import { ErrorHttp, esFecha, esJpeg, esPdf, esRutaDeDocumento, esRutaDeFoto, leerFicha, leerFoto, rutaDocumento, rutaFoto, sha256 } from '../ficha.ts'
 
 const ID = '99999999-9999-4999-8999-999999999991'
 const INSTALACION = '11111111-2222-4333-8444-555555555555'
@@ -84,4 +84,26 @@ Deno.test('esPdf mira cómo empieza el archivo, no su nombre', () => {
 
 Deno.test('sha256 da el valor de referencia', async () => {
   assertEquals(await sha256(new TextEncoder().encode('abc')), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+})
+
+Deno.test('esJpeg mira cómo empieza el archivo', () => {
+  assertEquals(esJpeg(new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0])), true)
+  assertEquals(esJpeg(new TextEncoder().encode('%PDF-1.7')), false)
+  assertEquals(esJpeg(new Uint8Array([0xff, 0xd8])), false)
+})
+
+Deno.test('una foto va en fotos/<año del parte>/<id>.jpg, y solo esa ruta es la suya', () => {
+  assertEquals(rutaFoto(ID, '2025-12-30'), `fotos/2025/${ID}.jpg`)
+  assertEquals(esRutaDeFoto(`fotos/2025/${ID}.jpg`, ID), true)
+  assertEquals(esRutaDeFoto(`documentos/2025/${ID}.pdf`, ID), false)
+  assertEquals(esRutaDeFoto(`fotos/2025/${ID}.png`, ID), false)
+  assertEquals(esRutaDeFoto(`fotos/2025/../../indice/${ID}.jpg`, ID), false)
+  assertEquals(esRutaDeFoto('indice/partes.csv', ID), false)
+})
+
+Deno.test('leerFoto pide el identificador de la foto y el del parte', () => {
+  assertEquals(leerFoto(formulario({ id: ID.toUpperCase(), parte: ` ${INSTALACION} ` })), { id: ID, parte: INSTALACION })
+  const error = assertThrows(() => leerFoto(formulario({ id: 'x' })), ErrorHttp)
+  assertEquals(error.estado, 400)
+  assertEquals(error.message.includes('identificador de la foto') && error.message.includes('identificador del parte'), true)
 })

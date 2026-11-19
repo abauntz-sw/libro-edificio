@@ -10,7 +10,7 @@
 // Si la base de datos rechaza un parte (por ejemplo, porque la revisión ya no está a cargo de esa persona),
 // no se reintenta: se conserva con el motivo, para que la persona lo vea y decida.
 
-import type { FilaParte } from './parte.ts'
+import type { Certificado, FilaParte } from './parte.ts'
 
 export interface Pendiente {
   /** El mismo identificador que el parte. */
@@ -18,6 +18,8 @@ export interface Pendiente {
   /** Quién lo escribió. En un móvil compartido, cada persona solo envía los suyos. */
   authId: string
   fila: FilaParte
+  /** El certificado, si lo lleva. Se envía antes que el parte. */
+  certificado?: Certificado
   /** Cuándo se guardó, en hora universal. */
   guardado: string
   /** Si la base de datos lo ha rechazado, por qué. Un parte rechazado no se reintenta solo. */
@@ -39,7 +41,7 @@ export type Resultado =
   /** La base de datos no lo acepta. Reintentar no lo arreglaría. */
   | { tipo: 'rechazado'; motivo: string }
 
-export type Enviar = (fila: FilaParte) => Promise<Resultado>
+export type Enviar = (fila: FilaParte, certificado?: Certificado) => Promise<Resultado>
 
 /** Error de Supabase, con lo que interesa aquí. */
 export interface ErrorSupabase {
@@ -102,8 +104,8 @@ export class Cola {
    * Guarda el parte en el móvil y lo intenta enviar.
    * Si guardarlo falla (sin espacio, modo privado), lo envía igualmente: mejor eso que perderlo.
    */
-  async registrar(authId: string, fila: FilaParte): Promise<Resultado> {
-    const pendiente: Pendiente = { id: fila.id, authId, fila, guardado: this.ahora().toISOString() }
+  async registrar(authId: string, fila: FilaParte, certificado?: Certificado): Promise<Resultado> {
+    const pendiente: Pendiente = { id: fila.id, authId, fila, certificado, guardado: this.ahora().toISOString() }
     let guardado = true
     try {
       await this.almacen.poner(pendiente)
@@ -112,7 +114,7 @@ export class Cola {
     }
     this.avisar()
     await this.enMarcha
-    const resultado = await this.enviar(fila)
+    const resultado = await this.enviar(fila, certificado)
     if (resultado.tipo === 'enviado') {
       if (guardado) await this.almacen.quitar(fila.id)
     } else if (resultado.tipo === 'rechazado') {
@@ -135,7 +137,7 @@ export class Cola {
     const todos = await this.almacen.todos()
     const suyos = todos.filter(p => p.authId === authId && !p.rechazo).sort((a, b) => a.guardado.localeCompare(b.guardado))
     for (const p of suyos) {
-      const resultado = await this.enviar(p.fila)
+      const resultado = await this.enviar(p.fila, p.certificado)
       if (resultado.tipo === 'sin-conexion') return
       if (resultado.tipo === 'enviado') await this.almacen.quitar(p.id)
       else await this.almacen.poner({ ...p, rechazo: resultado.motivo })

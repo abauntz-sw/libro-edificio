@@ -3,6 +3,7 @@
 // Contesta, desde el propio test, las peticiones que la web hace a Supabase, con datos ficticios.
 // Como la base de datos de verdad, ignora un parte cuyo identificador ya tiene (`on conflict do nothing`).
 // Así se comprueba lo que importa en la 1.7: cuántas veces llega cada parte.
+// También contesta por la función «archivos», para los certificados de los partes.
 
 import type { BrowserContext, Page, Route } from '@playwright/test'
 
@@ -18,8 +19,15 @@ export type Modo =
   /** Lo rechaza como la base de datos cuando no hay permiso. */
   | 'rechazar'
 
+/** Con qué perfil entra el test. La guarda no puede adjuntar certificados; la administración, sí. */
+export type PerfilFalso = 'guarda' | 'admin'
+
+const USUARIOS: Record<PerfilFalso, unknown> = {
+  guarda: { nombre: 'Guarda de Ejemplo', perfil: 'guarda', edificio_id: 'e1', contacto_id: 'c-guarda' },
+  admin: { nombre: 'Administración de Ejemplo', perfil: 'admin', edificio_id: 'e1', contacto_id: null },
+}
+
 const TABLAS: Record<string, unknown[]> = {
-  usuarios: [{ nombre: 'Guarda de Ejemplo', perfil: 'guarda', edificio_id: 'e1', contacto_id: 'c-guarda' }],
   edificios: [{ nombre: 'Albergue de Ejemplo (ficticio)' }],
   instalaciones: [{ id: 'i-incendios', nombre: 'Protección contra incendios' }],
   revisiones: [{
@@ -46,11 +54,20 @@ export class SupabaseFalso {
   partes = new Map<string, Record<string, unknown>>()
   /** Cada envío de un parte que ha llegado al servidor, con su identificador. Incluye los repetidos. */
   envios: string[] = []
+  /** Lo que llega al servidor, en orden: «certificado <id>» o «parte <id>». */
+  llegadas: string[] = []
+  /** Los certificados guardados, por identificador, con su ficha. */
+  certificados = new Map<string, Record<string, string | string[]>>()
   modo: Modo = 'aceptar'
   /** Peticiones que no sabe contestar. Si hay alguna, el test lo dice. */
   desconocidas: string[] = []
   private contexto?: BrowserContext
   private sinRed = false
+  private perfil: PerfilFalso
+
+  constructor(perfil: PerfilFalso = 'guarda') {
+    this.perfil = perfil
+  }
 
   /**
    * Corta o devuelve la red. Playwright deja el navegador sin conexión, pero sigue pasando las peticiones
@@ -78,16 +95,28 @@ export class SupabaseFalso {
     if (peticion.method() === 'OPTIONS') return ruta.fulfill({ status: 204, headers: CORS })
 
     const tabla = url.pathname.match(/^\/rest\/v1\/(\w+)$/)?.[1]
-    if (tabla && peticion.method() === 'GET' && TABLAS[tabla]) {
+    const filas = tabla === 'usuarios' ? [USUARIOS[this.perfil]] : tabla && TABLAS[tabla]
+    if (filas && peticion.method() === 'GET') {
       // Con .maybeSingle() la librería pide un solo objeto.
       const unoSolo = (peticion.headers().accept ?? '').includes('vnd.pgrst.object')
-      return ruta.fulfill({ status: 200, headers: CORS, json: unoSolo ? TABLAS[tabla][0] : TABLAS[tabla] })
+      return ruta.fulfill({ status: 200, headers: CORS, json: unoSolo ? filas[0] : filas })
+    }
+
+    if (url.pathname === '/functions/v1/archivos' && peticion.method() === 'POST') {
+      // Como la función de verdad: repetir la subida del mismo documento no lo duplica.
+      const ficha = leerFormulario(peticion.postDataBuffer() ?? Buffer.alloc(0), peticion.headers()['content-type'] ?? '')
+      const id = String(ficha.id)
+      this.llegadas.push(`certificado ${id}`)
+      const yaEstaba = this.certificados.has(id)
+      if (!yaEstaba) this.certificados.set(id, ficha)
+      return ruta.fulfill({ status: yaEstaba ? 200 : 201, headers: CORS, json: { id, yaEstaba } })
     }
 
     if (tabla === 'partes' && peticion.method() === 'POST') {
       const fila = peticion.postDataJSON() as Record<string, unknown>
       const id = String(fila.id)
       this.envios.push(id)
+      this.llegadas.push(`parte ${id}`)
       if (this.modo === 'rechazar') {
         return ruta.fulfill({ status: 403, headers: CORS, json: { code: '42501', message: 'new row violates row-level security policy for table "partes"', details: null, hint: null } })
       }
@@ -99,6 +128,27 @@ export class SupabaseFalso {
     this.desconocidas.push(`${peticion.method()} ${url.pathname}`)
     return ruta.fulfill({ status: 404, headers: CORS, json: { message: 'No existe en el Supabase de mentira' } })
   }
+}
+
+/**
+ * Lee los campos de texto de un formulario multipart. De un archivo, guarda su nombre y su contenido como texto.
+ * Basta para los PDF ficticios de los tests.
+ */
+function leerFormulario(cuerpo: Buffer, tipo: string): Record<string, string | string[]> {
+  const frontera = tipo.match(/boundary=(.+)$/)?.[1]
+  const campos: Record<string, string | string[]> = {}
+  if (!frontera) return campos
+  for (const parte of cuerpo.toString('latin1').split(`--${frontera}`)) {
+    const [cabecera, ...resto] = parte.split('\r\n\r\n')
+    const nombre = cabecera.match(/name="([^"]+)"/)?.[1]
+    if (!nombre) continue
+    const valor = Buffer.from(resto.join('\r\n\r\n').replace(/\r\n$/, ''), 'latin1').toString('utf8')
+    const archivo = cabecera.match(/filename="([^"]*)"/)?.[1]
+    if (archivo !== undefined) { campos.nombre_archivo = Buffer.from(archivo, 'latin1').toString('utf8'); campos.contenido = valor; continue }
+    const previo = campos[nombre]
+    campos[nombre] = previo === undefined ? valor : [...[previo].flat(), valor]
+  }
+  return campos
 }
 
 /** Abre la web y espera a Inicio. */

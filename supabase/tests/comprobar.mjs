@@ -458,6 +458,41 @@ for (const quien of ['admin', 'consulta', 'calor']) {
   })
 }
 await como('anon', async () => ok(await falla(() => puedoAdjuntar()), 'sin sesión no se puede preguntar puedo_adjuntar_foto'))
+
+// El plazo: 7 días desde que se recibió el parte.
+const parteViejo = '88888888-8888-4888-8888-888888888802'
+const parteReciente = '88888888-8888-4888-8888-888888888803'
+const fueraDePlazo = async p => (await filas('select public.foto_fuera_de_plazo($1) as si', [p]))[0].si
+await como('guarda', async () => {
+  // El móvil intenta poner su propia hora de llegada, muy lejos en el futuro.
+  await db.query(`insert into public.partes (id, edificio_id, instalacion_id, fecha, tipo, descripcion, recibido_en)
+    values ($1, $2, $3, $4, 'comprobacion', 'Parte que se envejece', now() + interval '1 year'),
+           ($5, $2, $3, $4, 'comprobacion', 'Parte reciente', now())`, [parteViejo, edificio, extintores, hoy, parteReciente])
+  ok(await cuenta(`select 1 from public.partes where id = $1 and recibido_en <= now()`, [parteViejo]) === 1,
+    'recibido_en lo pone la base de datos, no el móvil')
+}, { guardar: true })
+// Sin sesión, como quien prepara la prueba: se cambia la hora de llegada para simular el paso del tiempo.
+await db.query(`update public.partes set recibido_en = now() - interval '8 days' where id = $1`, [parteViejo])
+await db.query(`update public.partes set recibido_en = now() - interval '6 days' where id = $1`, [parteReciente])
+await como('guarda', async () => {
+  ok(await puedoAdjuntar(parteViejo) === false, 'a un parte recibido hace 8 días no se le añaden fotos')
+  ok(await falla(() => ponerFoto('88888888-8888-4888-8888-888888888831', undefined, parteViejo)),
+    'y la tabla tampoco deja apuntar la foto')
+  ok(await fueraDePlazo(parteViejo) === true, 'quien lo escribió sabe que es por el plazo')
+  ok(await fueraDePlazo(parteReciente) === false, 'un parte en plazo no está fuera de plazo')
+  ok(await puedoAdjuntar(parteReciente) === true, 'a uno recibido hace 6 días, sí')
+  ok(!(await falla(() => ponerFoto('88888888-8888-4888-8888-888888888832', undefined, parteReciente))),
+    'y la foto queda apuntada')
+})
+for (const quien of ['admin', 'consulta', 'calor']) {
+  await como(quien, async () => ok(await fueraDePlazo(parteViejo) === false, `a ${quien} no se le dice nada del plazo de un parte ajeno`))
+}
+await como('anon', async () => ok(await falla(() => fueraDePlazo(parteViejo)), 'sin sesión no se puede preguntar foto_fuera_de_plazo'))
+await como('admin', async () => {
+  // La administración tampoco puede alargar el plazo: no tiene permiso para cambiar partes.
+  ok(await falla(() => db.query(`update public.partes set recibido_en = now() where id = $1`, [parteViejo])),
+    'nadie con sesión cambia la hora de llegada de un parte')
+})
 await como('admin', async () => ok(await cuenta('select 1 from public.parte_fotos where id = $1', [foto1]) === 1, 'la administración ve la foto'))
 await como('calor', async () => ok(await cuenta('select 1 from public.parte_fotos where id = $1', [foto1]) === 0, 'una empresa no ve la foto de una instalación ajena'))
 

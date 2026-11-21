@@ -86,6 +86,58 @@ test('un parte rechazado se conserva con su motivo, también al volver a abrir',
   await expect(page.getByText(/no aceptado/)).toBeHidden()
 })
 
+test('sin cobertura, el certificado se guarda con el parte y llega antes que él, una sola vez', async ({ page, context }) => {
+  // Este test entra como Administración: la guarda no adjunta certificados.
+  supabase = new SupabaseFalso('admin')
+  await context.unrouteAll()
+  await supabase.instalar(context)
+  await abrir(page)
+  await page.getByRole('button', { name: 'Registrar parte' }).click()
+  await page.getByRole('heading', { name: '¿Dónde?' }).waitFor()
+
+  await supabase.red(false)
+  await rellenarParte(page, 'Revisión con su certificado.')
+  await page.locator('input[type=file]').setInputFiles({
+    name: 'certificado extintores.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.7 certificado ficticio'),
+  })
+  await expect(page.getByText('Certificado: certificado extintores.pdf')).toBeVisible()
+  await page.getByRole('button', { name: 'Enviar parte' }).click()
+  await expect(page.getByText(/Sin cobertura\. El parte queda guardado en este móvil, con su certificado,/)).toBeVisible()
+  expect(supabase.llegadas).toEqual([])
+
+  // El certificado está guardado en el móvil, en IndexedDB, no solo en la memoria de la página.
+  const guardado = await page.evaluate(() => new Promise<string>((resolver, fallar) => {
+    const abierta = indexedDB.open('libro-edificio')
+    abierta.onerror = () => fallar(abierta.error)
+    abierta.onsuccess = () => {
+      const lectura = abierta.result.transaction('partes').objectStore('partes').getAll()
+      lectura.onsuccess = async () => resolver(await lectura.result[0].certificado.archivo.text())
+    }
+  }))
+  expect(guardado).toBe('%PDF-1.7 certificado ficticio')
+
+  await page.getByRole('button', { name: '← Inicio' }).click()
+  await expect(page.getByText('1 parte sin enviar.')).toBeVisible()
+  await supabase.red(true)
+  await expect(page.getByText('1 parte sin enviar.')).toBeHidden()
+
+  const [parte] = supabase.partes.values()
+  const [[idCertificado, ficha]] = supabase.certificados.entries()
+  expect(supabase.llegadas).toEqual([`certificado ${idCertificado}`, `parte ${parte.id}`])
+  expect(parte.certificado_id).toBe(idCertificado)
+  expect(ficha).toMatchObject({
+    tipo: 'certificado', titulo: 'Certificado: comprobación en Protección contra incendios', instalaciones: 'i-incendios',
+    nombre_archivo: 'certificado extintores.pdf', contenido: '%PDF-1.7 certificado ficticio',
+  })
+})
+
+test('la guarda no ve el botón del certificado', async ({ page }) => {
+  await abrir(page)
+  await page.getByRole('button', { name: 'Registrar parte' }).click()
+  await page.getByRole('heading', { name: '¿Dónde?' }).waitFor()
+  await expect(page.getByText('Añadir certificado')).toHaveCount(0)
+})
+
 test('sin cobertura, el formulario se abre con lo de la última vez', async ({ page }) => {
   await abrir(page)
   await page.getByRole('button', { name: 'Registrar parte' }).click()

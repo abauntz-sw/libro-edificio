@@ -34,7 +34,9 @@ Para anotar una intervención desde el móvil en menos de un minuto. Lo ven la a
    - Si la revisión tiene periodicidad, la pantalla dice a qué fecha pasará la próxima. La calcula la base de datos al guardar el parte.
    - Si no la tiene, pide la próxima fecha, que tiene que ser posterior a hoy.
 3. **¿Qué has hecho?** Solo los tipos de ese perfil: la guarda, comprobación o incidencia; las empresas, preventivo, reparación, inspección o urgencia.
-4. **Una frase** y **Enviar parte**.
+4. **Una frase**.
+5. **Añadir certificado**, si se quiere. Solo para la administración y las empresas: la guarda no archiva documentos. Un PDF de hasta 25 MB.
+6. **Enviar parte**.
 
 El parte se guarda en la tabla `partes`, con la fecha de hoy del aparato. La base de datos pone el edificio, el autor y la empresa, y vuelve a comprobar que ese perfil pueda registrarlo.
 
@@ -42,13 +44,15 @@ El identificador del parte se crea en el móvil al empezarlo. Si el envío falla
 
 Un parte no se cambia ni se borra. Una corrección es un parte nuevo.
 
-Todavía no lleva fotos ni certificado: llegarán en un paso siguiente, porque la función `archivos` solo acepta PDF.
+El certificado se archiva como documento de tipo «Certificado», de la instalación del parte, con la función `archivos`. Va antes que el parte, porque el parte lo apunta en `certificado_id` y la base de datos no deja apuntar un documento que no existe. Su identificador se crea al elegir el archivo, así que reenviarlo tampoco duplica nada. Si el certificado no se puede archivar (por ejemplo, porque no es un PDF), el parte tampoco se envía, y la pantalla dice por qué.
+
+Todavía no lleva fotos: llegarán en un paso siguiente.
 
 ## Sin cobertura
 
 En el refugio a menudo no hay red. Ningún parte se pierde por eso:
 
-1. **El parte se guarda primero en el móvil**, en IndexedDB, y luego se envía. Solo se borra del móvil cuando la base de datos lo ha aceptado.
+1. **El parte se guarda primero en el móvil**, en IndexedDB, con una copia de su certificado si lo lleva, y luego se envía. Solo se borra del móvil cuando la base de datos lo ha aceptado.
 2. **Si no hay red**, la pantalla lo dice y el parte queda pendiente. En Inicio se ve cuántos quedan, con un botón «Enviar ahora».
 3. **Se reintenta solo** al abrir la aplicación, al volver la conexión y al volver a la pestaña. No se depende de que el navegador envíe en segundo plano, porque Safari, en iPhone, no lo hace.
 4. **Nunca se duplica.** El identificador del parte lo crea el móvil, y la base de datos ignora uno que ya tiene. Da igual si la respuesta se perdió por el camino.
@@ -90,7 +94,7 @@ Abre la dirección que aparece, normalmente `http://localhost:5173`.
 
 ### Tests de extremo a extremo
 
-Están en `e2e/`. Comprueban, cortando y devolviendo la red, que un parte llega al reconectar y no se duplica. No usan ningún proyecto de Supabase: `e2e/supabase-falso.ts` contesta por él con datos ficticios.
+Están en `e2e/`. Comprueban, cortando y devolviendo la red, que un parte llega al reconectar y no se duplica, también con su certificado. No usan ningún proyecto de Supabase: `e2e/supabase-falso.ts` contesta por él con datos ficticios.
 
 La primera vez hay que descargar el navegador: `npx playwright install chromium`. En Windows también sirve Edge, sin descargar nada: `PLAYWRIGHT_CANAL=msedge npm run e2e` (en PowerShell, `$env:PLAYWRIGHT_CANAL='msedge'; npm run e2e`).
 

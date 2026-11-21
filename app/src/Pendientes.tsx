@@ -32,7 +32,7 @@ export function Pendientes({ cola, authId, recuento }: { cola: Cola; authId: str
       {rechazados.map(p => (
         <div key={p.id} className="pila" style={{ gap: 4 }}>
           <b className="error">Parte del {fecha(p.fila.fecha)} no aceptado</b>
-          <span className="peq">«{p.fila.descripcion}»</span>
+          <span className="peq">«{p.fila.descripcion}»{p.certificado && `, con el certificado «${p.certificado.nombre}»`}</span>
           <span className="peq">{p.rechazo}</span>
           <div>
             <button className="btn" onClick={() => {

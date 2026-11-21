@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { almacenEnMemoria, clasificar, Cola, type Resultado } from '../src/cola.ts'
-import type { FilaParte } from '../src/parte.ts'
+import type { Certificado, FilaParte } from '../src/parte.ts'
 import { conRecuerdo } from '../src/recuerdo.ts'
 
 const fila = (id: string, fecha = '2026-11-16'): FilaParte => ({
   id, instalacion_id: 'i1', fecha, tipo: 'comprobacion', descripcion: `Parte ${id}`, revision_id: null, proxima_revision: null,
+  certificado_id: null,
 })
 
 /** Un servidor de mentira: responde lo que se le diga y apunta qué recibe. */
@@ -42,6 +43,26 @@ describe('clasificar', () => {
 })
 
 describe('Cola', () => {
+  it('sin red, guarda el certificado con el parte y los envía juntos al volver la conexión', async () => {
+    const almacen = almacenEnMemoria()
+    const certificado: Certificado = {
+      id: 'c1', archivo: new Blob(['%PDF-1.7 ficticio']), nombre: 'cert.pdf', titulo: 'Certificado', fecha: '2026-11-16', instalacion: 'i1',
+    }
+    const recibidos: (string | undefined)[] = []
+    let hayRed = false
+    const cola = new Cola(almacen, async (_f, c) => {
+      if (!hayRed) return { tipo: 'sin-conexion' }
+      recibidos.push(await c?.archivo.text())
+      return { tipo: 'enviado' }
+    })
+    expect(await cola.registrar('ana', { ...fila('p1'), certificado_id: 'c1' }, certificado)).toEqual({ tipo: 'sin-conexion' })
+    expect(almacen.datos.get('p1')?.certificado?.nombre).toBe('cert.pdf')
+    hayRed = true
+    await cola.reintentar('ana')
+    expect(recibidos).toEqual(['%PDF-1.7 ficticio'])
+    expect(almacen.datos.size).toBe(0)
+  })
+
   it('con red, envía el parte y no lo deja en el móvil', async () => {
     const almacen = almacenEnMemoria(), s = servidor()
     const cola = new Cola(almacen, s.enviar)

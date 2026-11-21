@@ -1,12 +1,29 @@
-// Atiende cada petición: subir un documento (POST) o descargarlo (GET).
+// Atiende cada petición: subir un documento o una foto de un parte (POST), o descargarlos (GET).
 //
 // El orden importa. Primero se comprueba todo lo que se puede, después se escribe el archivo
 // y al final se crea la ficha. Si el último paso falla, queda un archivo sin ficha, que no hace daño.
 // Nunca queda una ficha sin archivo.
 
-import { ErrorHttp, esPdf, esRutaDeDocumento, esUuid, leerFicha, LIMITE_BYTES, rutaDocumento, sha256 } from './ficha.ts'
+import {
+  ErrorHttp,
+  esJpeg,
+  esPdf,
+  esRutaDeDocumento,
+  esRutaDeFoto,
+  esUuid,
+  leerFicha,
+  leerFoto,
+  LIMITE_BYTES,
+  LIMITE_FOTO_BYTES,
+  rutaDocumento,
+  rutaFoto,
+  sha256,
+} from './ficha.ts'
 import type { Almacen } from './github.ts'
 import type { Libro } from './libro.ts'
+
+/** Los días que hay para añadir fotos a un parte, desde que se recibe. La regla está en la base de datos. */
+const PLAZO_FOTOS_DIAS = 7
 
 export interface Piezas {
   /** Abre la base de datos con la sesión de quien llama. */
@@ -43,6 +60,13 @@ async function subir(peticion: Request, libro: Libro, piezas: Piezas): Promise<R
   if (archivo.size === 0) throw new ErrorHttp(400, 'El archivo está vacío.')
   if (archivo.size > LIMITE_BYTES) throw demasiadoGrande()
 
+  // Una foto lleva el parte al que va. Un documento, su ficha.
+  return formulario.has('parte')
+    ? await subirFoto(formulario, archivo, libro, piezas)
+    : await subirDocumento(formulario, archivo, libro, piezas)
+}
+
+async function subirDocumento(formulario: FormData, archivo: File, libro: Libro, piezas: Piezas): Promise<Response> {
   const ficha = leerFicha(formulario, archivo.name)
   const bytes = new Uint8Array(await archivo.arrayBuffer())
   if (!esPdf(bytes)) throw new ErrorHttp(400, 'El archivo no es un PDF.')
@@ -80,8 +104,86 @@ async function subir(peticion: Request, libro: Libro, piezas: Piezas): Promise<R
   return json(201, { id: ficha.id, ruta, sha256: huella, yaEstaba: escrito.yaEstaba })
 }
 
+/**
+ * Guarda una foto de un parte que ya está en la base de datos.
+ * El móvil envía primero el parte y después sus fotos, una a una: así una foto nunca llega sin su parte.
+ */
+async function subirFoto(formulario: FormData, archivo: File, libro: Libro, piezas: Piezas): Promise<Response> {
+  if (archivo.size > LIMITE_FOTO_BYTES) {
+    throw new ErrorHttp(413, `La foto pesa más de ${Math.round(LIMITE_FOTO_BYTES / 1024 / 1024)} MB. Hazla con menos resolución.`)
+  }
+  const { id, parte } = leerFoto(formulario)
+  const bytes = new Uint8Array(await archivo.arrayBuffer())
+  if (!esJpeg(bytes)) throw new ErrorHttp(400, 'La foto no es un JPEG.')
+  const huella = await sha256(bytes)
+
+  // Se responde lo mismo si el parte no existe que si es de otro: así no se sabe cuál de las dos cosas pasa.
+  const edificio = await libro.edificio()
+  const fecha = edificio && await libro.fechaParte(parte)
+  if (!edificio || !fecha || !(await libro.puedoAdjuntarFoto(parte))) {
+    // Solo a quien escribió el parte se le dice que es por el plazo.
+    if (edificio && fecha && await libro.fotoFueraDePlazo(parte)) {
+      throw new ErrorHttp(403, `Ese parte se recibió hace más de ${PLAZO_FOTOS_DIAS} días y ya no admite fotos.`)
+    }
+    throw new ErrorHttp(403, 'No puedes añadir fotos a ese parte.')
+  }
+
+  const previa = await libro.foto(id)
+  if (previa) {
+    // Repetir una subida que ya salió bien no hace nada, igual que con los documentos.
+    if (previa.sha256 !== huella || previa.parte !== parte) throw new ErrorHttp(409, 'Ya hay otra foto con ese identificador.')
+    return json(200, { id, ruta: previa.ruta, sha256: huella, yaEstaba: true })
+  }
+
+  // Si el identificador es de una foto que esta persona no ve, se responde 409 de una de dos formas.
+  // Si la ruta es la misma, GitHub no deja pisar el archivo. Si es otra (un parte de otro año),
+  // GitHub guarda el archivo y la base de datos rechaza el identificador repetido: queda un archivo suelto,
+  // que no hace daño. Solo pasa si alguien manipula el móvil.
+  const ruta = rutaFoto(id, fecha)
+  const escrito = await piezas.almacen().escribir(edificio.repositorio, ruta, bytes, `Añade la foto ${id}`)
+
+  try {
+    await libro.registrarFoto({ id, edificio: edificio.id, parte, ruta, sha256: huella })
+  } catch (error) {
+    if (error instanceof ErrorHttp) throw error
+    console.error(`Foto guardada sin apuntar: ${ruta}`, error)
+    throw new ErrorHttp(500, 'La foto se ha guardado, pero no se ha apuntado en el parte. Vuelve a intentarlo: no se duplicará.')
+  }
+  return json(201, { id, ruta, sha256: huella, yaEstaba: escrito.yaEstaba })
+}
+
+/** Entrega una foto, si quien la pide ve su parte. */
+async function descargarFoto(id: string, libro: Libro, piezas: Piezas): Promise<Response> {
+  if (!esUuid(id)) throw new ErrorHttp(400, 'Falta el identificador de la foto.')
+  const noEsta = new ErrorHttp(404, 'No se encuentra esa foto.')
+  const foto = await libro.foto(id)
+  const edificio = foto && await libro.edificio()
+  if (!foto || !edificio) throw noEsta
+  // La base de datos ya lo impide, pero aquí se repite: solo se entregan archivos de fotos/.
+  if (!esRutaDeFoto(foto.ruta, id)) {
+    console.error(`Foto ${id} con una ruta que no es de una foto: ${foto.ruta}`)
+    throw noEsta
+  }
+  const contenido = await piezas.almacen().leer(edificio.repositorio, foto.ruta)
+  if (!contenido) {
+    console.error(`Foto sin archivo: ${foto.ruta}`)
+    throw noEsta
+  }
+  return new Response(contenido, {
+    headers: {
+      ...CORS,
+      'Content-Type': 'image/jpeg',
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, no-store',
+    },
+  })
+}
+
 async function descargar(peticion: Request, libro: Libro, piezas: Piezas): Promise<Response> {
-  const id = (new URL(peticion.url).searchParams.get('id') ?? '').toLowerCase()
+  const parametros = new URL(peticion.url).searchParams
+  if (parametros.has('foto')) return await descargarFoto((parametros.get('foto') ?? '').toLowerCase(), libro, piezas)
+
+  const id = (parametros.get('id') ?? '').toLowerCase()
   if (!esUuid(id)) throw new ErrorHttp(400, 'Falta el identificador del documento.')
 
   // La base de datos solo devuelve el documento si esa persona puede verlo.

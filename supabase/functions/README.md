@@ -4,19 +4,21 @@ Programas pequeños que se ejecutan en Supabase, no en el navegador. Sirven para
 
 Hay dos:
 
-- `archivos`: sube y descarga los documentos.
+- `archivos`: sube y descarga los documentos y las fotos de los partes.
 - `exportar`: cada noche deja el índice de cada edificio en su repositorio. Está explicada al final, en [«Qué hace `exportar`»](#qué-hace-exportar).
 
 ## Qué hace `archivos`
 
-Sube y descarga los documentos del repositorio privado del edificio.
+Sube y descarga los documentos y las fotos de los partes, del repositorio privado del edificio.
 
 La aplicación no habla con GitHub. Habla con esta función, y la función comprueba el permiso antes de tocar nada.
 
 | Petición | Qué hace |
 |---|---|
 | `POST /archivos` | Guarda un PDF en el repositorio y crea su ficha |
-| `GET /archivos?id=…` | Devuelve el archivo, si quien lo pide puede verlo |
+| `POST /archivos` con `parte` | Guarda una foto de un parte y la apunta en `parte_fotos` |
+| `GET /archivos?id=…` | Devuelve el documento, si quien lo pide puede verlo |
+| `GET /archivos?foto=…` | Devuelve la foto, si quien la pide ve su parte |
 
 Las dos piden la sesión de la persona en la cabecera `Authorization`. La librería de Supabase la pone sola.
 
@@ -52,6 +54,29 @@ La función busca la ficha con la sesión de la persona. La base de datos solo s
 
 Solo entrega archivos de `documentos/`, con la forma `documentos/AAAA/<id>.<extensión>`. Si una ficha apunta a otro archivo del repositorio, como el índice o una foto, responde lo mismo: «No se encuentra ese documento».
 
+### Subir una foto de un parte
+
+El móvil envía primero el parte, con `insert` en la tabla `partes`, y después cada foto. Así una foto nunca llega sin su parte. Se manda un formulario con estos campos:
+
+| Campo | Qué es |
+|---|---|
+| `archivo` | La foto, en JPEG. Como mucho 5 MB: el móvil la comprime antes |
+| `id` | Un identificador nuevo para la foto, creado por el móvil |
+| `parte` | El identificador del parte |
+
+Pasos, en este orden:
+
+1. Comprueba que es un JPEG y que no pasa de 5 MB.
+2. Pregunta a la base de datos si esa persona puede añadir fotos a ese parte, con `puedo_adjuntar_foto`. Solo puede quien escribió el parte, y hasta 7 días después de que llegara (`recibido_en`). Pasado ese plazo, a quien escribió el parte se le dice: «Ese parte se recibió hace más de 7 días y ya no admite fotos». A los demás, lo de siempre: «No puedes añadir fotos a ese parte».
+3. Escribe la foto en `fotos/AAAA/<id>.jpg`. El año es el de la fecha del parte.
+4. La apunta en `parte_fotos`, con la sesión de esa persona.
+
+Igual que con los documentos: repetir la subida con el mismo `id` y la misma foto no duplica nada, y si el paso 4 falla, repetirla lo arregla.
+
+### Descargar una foto
+
+`GET /archivos?foto=<id>`. La entrega a quien ve su parte: la administración, la consulta y la guarda, todas; una empresa, las de sus instalaciones. Si no, responde «No se encuentra esa foto». Solo entrega archivos con la forma `fotos/AAAA/<id>.jpg`.
+
 ### Respuestas
 
 Cuando algo no vale, responde un JSON con el motivo: `{"error": "El archivo no es un PDF."}`.
@@ -59,13 +84,13 @@ Cuando algo no vale, responde un JSON con el motivo: `{"error": "El archivo no e
 | Código | Cuándo |
 |---|---|
 | 200 | Descarga correcta, o subida repetida que ya estaba hecha |
-| 201 | Documento guardado |
+| 201 | Documento o foto guardados |
 | 400 | Falta algo o algo no vale |
 | 401 | No hay sesión o ha caducado |
-| 403 | Esa persona no puede archivar ahí |
-| 404 | El documento no existe o no puede verlo |
+| 403 | Esa persona no puede archivar ahí, o no puede añadir fotos a ese parte (no es suyo o han pasado 7 días) |
+| 404 | El documento o la foto no existen, o no puede verlos |
 | 409 | Ese identificador ya es de otro archivo |
-| 413 | El archivo pesa más de 25 MB |
+| 413 | El documento pesa más de 25 MB, o la foto más de 5 MB |
 | 500 | Fallo del servidor. El detalle queda en el registro de la función |
 
 ## Claves
@@ -179,8 +204,8 @@ Que una empresa no vea un documento ajeno lo decide la base de datos. Eso se com
 
 ## Límites
 
-- **Solo PDF.** El archivo guarda los documentos en PDF. Las fotos y las firmas de los partes llegarán con la tarea 1.6.
-- **25 MB por archivo.** Lo mayor va por la herramienta de carga local.
+- **Documentos en PDF y fotos en JPEG.** Las firmas de los partes todavía no.
+- **25 MB por documento y 5 MB por foto.** Un documento mayor va por la herramienta de carga local.
 - **Escrituras de una en una.** GitHub no admite dos a la vez en el mismo repositorio. La función las pone en cola y, si aun así GitHub responde con conflicto, espera y repite hasta cinco veces.
 
 ## Qué hace `exportar`

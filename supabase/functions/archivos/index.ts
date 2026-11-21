@@ -1,7 +1,9 @@
 // Función «archivos»: sube y descarga los documentos del repositorio privado del edificio.
 //
-//   POST /archivos          con el archivo y su ficha: lo guarda y crea la ficha.
-//   GET  /archivos?id=...   devuelve el archivo, si quien lo pide puede verlo.
+//   POST /archivos            con el archivo y su ficha: lo guarda y crea la ficha.
+//   POST /archivos            con una foto y su parte: la guarda y la apunta en el parte.
+//   GET  /archivos?id=...     devuelve el documento, si quien lo pide puede verlo.
+//   GET  /archivos?foto=...   devuelve la foto, si quien la pide ve su parte.
 //
 // Este archivo solo junta las piezas. Lo que hace cada una está en los demás.
 

@@ -2,9 +2,11 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { type ChangeEvent, useEffect, useState } from 'react'
 import type { Acceso } from './acceso.ts'
 import type { Cola } from './cola.ts'
+import { comprimirFoto, MAX_FOTOS } from './fotos.ts'
 import {
-  BORRADOR_VACIO, type Borrador, type Certificado, faltaEnParte, filaParte, hoyLocal, type Instalacion, leerCertificado,
-  leerDatosParte, NOMBRE_TIPO, puedeAdjuntarCertificado, type Revision, revisionesDe, sumarMeses, tiposDe, tituloCertificado,
+  BORRADOR_VACIO, type Borrador, type Certificado, faltaEnParte, filaParte, type Foto, hoyLocal, type Instalacion,
+  leerCertificado, leerDatosParte, loQueLleva, NOMBRE_TIPO, puedeAdjuntarCertificado, type Revision, revisionesDe, sumarMeses,
+  tiposDe, tituloCertificado,
 } from './parte.ts'
 import { CLAVE, conRecuerdo } from './recuerdo.ts'
 
@@ -18,10 +20,22 @@ interface Elegido {
   error?: string
 }
 
+/** La miniatura de una foto elegida. La dirección de la imagen se libera al quitarla. */
+function Miniatura({ foto }: { foto: Blob }) {
+  const [url, setUrl] = useState('')
+  useEffect(() => {
+    const u = URL.createObjectURL(foto)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [foto])
+  return url ? <img src={url} alt="" /> : null
+}
+
 /**
  * Registrar parte: dónde, si cierra una revisión, qué se ha hecho y una frase. Pensado para el móvil.
- * La administración y las empresas pueden adjuntar un certificado en PDF.
- * Funciona sin cobertura: el parte, con su certificado, se guarda en el móvil y la cola lo envía cuando hay red.
+ * Todos pueden añadir fotos, que se comprimen en el móvil. La administración y las empresas, además,
+ * un certificado en PDF.
+ * Funciona sin cobertura: el parte, con lo que lleva, se guarda en el móvil y la cola lo envía cuando hay red.
  */
 export function Parte({ supabase, authId, acceso, cola, volver }: {
   supabase: SupabaseClient
@@ -41,6 +55,9 @@ export function Parte({ supabase, authId, acceso, cola, volver }: {
   const [enviado, setEnviado] = useState('')
   const [intento, setIntento] = useState(0)
   const [cert, setCert] = useState<Elegido | null>(null)
+  const [fotos, setFotos] = useState<Foto[]>([])
+  // Cuántas fotos se están comprimiendo. Mientras tanto no se envía, para no dejar ninguna fuera.
+  const [preparando, setPreparando] = useState(0)
 
   useEffect(() => {
     let vigente = true
@@ -74,28 +91,53 @@ export function Parte({ supabase, authId, acceso, cola, volver }: {
     setCert({ id: crypto.randomUUID(), nombre: archivo.name, ...leido })
   }
 
+  async function elegirFotos(e: ChangeEvent<HTMLInputElement>) {
+    const archivos = [...(e.target.files ?? [])]
+    e.target.value = ''
+    if (archivos.length === 0) return
+    setAviso('')
+    setEnviado('')
+    const hueco = MAX_FOTOS - fotos.length - preparando
+    const elegidas = archivos.slice(0, Math.max(0, hueco))
+    const fallos: string[] = []
+    if (archivos.length > elegidas.length) fallos.push(`Un parte lleva ${MAX_FOTOS} fotos como mucho.`)
+    setPreparando(n => n + elegidas.length)
+    for (const archivo of elegidas) {
+      const leida = await comprimirFoto(archivo)
+      // Un identificador para cada foto. Si el envío se repite, es el mismo: no se duplica.
+      if ('copia' in leida) setFotos(previas => [...previas, { id: crypto.randomUUID(), archivo: leida.copia, nombre: archivo.name }])
+      else fallos.push(`«${archivo.name}»: ${leida.error}`)
+      setPreparando(n => n - 1)
+    }
+    if (fallos.length > 0) setAviso(fallos.join(' '))
+  }
+
   async function enviar() {
     const falta = faltaEnParte(b, revision, hoy)
     if (falta) { setAviso(falta); return }
+    if (preparando > 0) { setAviso('Espera un momento: se están preparando las fotos.'); return }
     if (cert?.error) { setAviso(`${cert.error} Quita el certificado o elige otro.`); return }
     const instalacion = datos?.instalaciones.find(i => i.id === b.instalacion)?.nombre ?? ''
     const certificado: Certificado | undefined = cert?.copia && b.tipo
       ? { id: cert.id, archivo: cert.copia, nombre: cert.nombre, titulo: tituloCertificado(b.tipo, instalacion), fecha: hoy, instalacion: b.instalacion }
       : undefined
     setEnviando(true)
-    const resultado = await cola.registrar(authId, filaParte(id, b, revision, hoy, certificado?.id ?? null), certificado)
+    const resultado = await cola.registrar(authId, filaParte(id, b, revision, hoy, certificado?.id ?? null), certificado, fotos)
     setEnviando(false)
     // Rechazado: se queda en el formulario para corregirlo. Con el mismo identificador, no se duplica.
     if (resultado.tipo === 'rechazado') { setAviso(resultado.motivo); return }
-    const conCertificado = certificado ? ', con su certificado,' : ''
+    const lleva = loQueLleva(Boolean(certificado), fotos.length)
     if (resultado.tipo === 'sin-conexion') {
-      setEnviado(`Sin cobertura. El parte queda guardado en este móvil${conCertificado} y se enviará solo cuando vuelva la conexión.`)
+      setEnviado(`Sin cobertura. El parte queda guardado en este móvil${lleva && `, con ${lleva},`} y se enviará solo cuando vuelva la conexión.`)
     } else {
-      const enviadoCon = certificado ? 'Parte enviado, con su certificado.' : 'Parte enviado.'
+      const enviadoCon = lleva && !resultado.aviso ? `Parte enviado, con ${lleva}.` : 'Parte enviado.'
       setEnviado(revision ? `${enviadoCon} La revisión «${revision.descripcion}» queda hecha hoy.` : enviadoCon)
+      // El parte ha llegado, pero alguna foto no. Se dice aquí, y también queda en Inicio.
+      if (resultado.aviso) setAviso(resultado.aviso)
     }
     setB(BORRADOR_VACIO)
     setCert(null)
+    setFotos([])
     setId(crypto.randomUUID())
   }
 
@@ -167,23 +209,42 @@ export function Parte({ supabase, authId, acceso, cola, volver }: {
             <textarea value={b.descripcion} onChange={e => cambiar({ descripcion: e.target.value })} />
           </label>
 
-          {puedeAdjuntarCertificado(acceso.perfil) && (
-            <div className="pila" style={{ gap: 4 }}>
-              <div className="fila">
-                <label className="btn" style={{ cursor: 'pointer' }}>
-                  {cert ? `Certificado: ${cert.nombre}` : 'Añadir certificado'}
-                  <input type="file" accept="application/pdf,.pdf" hidden onChange={elegirCertificado} disabled={enviando} />
+          <div className="pila" style={{ gap: 4 }}>
+            <div className="fila">
+              {fotos.length + preparando < MAX_FOTOS && (
+                <label className={enviando ? 'btn apagado' : 'btn'} style={{ cursor: enviando ? 'default' : 'pointer' }}>
+                  {fotos.length > 0 ? 'Añadir otra foto' : 'Añadir foto'}
+                  <input type="file" accept="image/*" multiple hidden onChange={elegirFotos} disabled={enviando} />
                 </label>
-                {cert && <button className="btn" onClick={() => setCert(null)} disabled={enviando}>Quitar</button>}
-              </div>
-              {cert?.error && <p className="error peq">{cert.error}</p>}
-              {cert?.copia && <p className="suave peq">Se guardará en el Archivo como certificado de esta instalación.</p>}
+              )}
+              {puedeAdjuntarCertificado(acceso.perfil) && (
+                <>
+                  <label className="btn" style={{ cursor: 'pointer' }}>
+                    {cert ? `Certificado: ${cert.nombre}` : 'Añadir certificado'}
+                    <input type="file" accept="application/pdf,.pdf" hidden onChange={elegirCertificado} disabled={enviando} />
+                  </label>
+                  {cert && <button className="btn" onClick={() => setCert(null)} disabled={enviando}>Quitar</button>}
+                </>
+              )}
             </div>
-          )}
+            {preparando > 0 && <p className="suave peq" role="status">Preparando {preparando === 1 ? 'la foto' : `${preparando} fotos`}…</p>}
+            {fotos.length > 0 && (
+              <ul className="fotos" aria-label="Fotos del parte">
+                {fotos.map(f => (
+                  <li key={f.id}>
+                    <Miniatura foto={f.archivo} />
+                    <button className="btn peq" aria-label={`Quitar la foto ${f.nombre}`} disabled={enviando}
+                      onClick={() => setFotos(previas => previas.filter(p => p.id !== f.id))}>Quitar</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {cert?.error && <p className="error peq">{cert.error}</p>}
+            {cert?.copia && <p className="suave peq">Se guardará en el Archivo como certificado de esta instalación.</p>}
+          </div>
 
           {aviso && <p className="error" role="alert">{aviso}</p>}
           <button className="btn prim grande" onClick={enviar} disabled={enviando}>{enviando ? 'Enviando…' : 'Enviar parte'}</button>
-          <p className="suave peq">Las fotos llegarán en un paso siguiente.</p>
         </>
       )}
     </div>

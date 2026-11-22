@@ -3,7 +3,7 @@
 // Contesta, desde el propio test, las peticiones que la web hace a Supabase, con datos ficticios.
 // Como la base de datos de verdad, ignora un parte cuyo identificador ya tiene (`on conflict do nothing`).
 // Así se comprueba lo que importa en la 1.7: cuántas veces llega cada parte.
-// También contesta por la función «archivos», para los certificados de los partes.
+// También contesta por la función «archivos», para los certificados y las fotos de los partes.
 
 import type { BrowserContext, Page, Route } from '@playwright/test'
 
@@ -18,6 +18,13 @@ export type Modo =
   | 'perder-respuesta'
   /** Lo rechaza como la base de datos cuando no hay permiso. */
   | 'rechazar'
+
+/** Cómo contesta al subir una foto. */
+export type ModoFotos =
+  /** La guarda y responde bien. */
+  | 'aceptar'
+  /** La rechaza como la función cuando el parte se recibió hace más de 7 días. */
+  | 'fuera-de-plazo'
 
 /** Con qué perfil entra el test. La guarda no puede adjuntar certificados; la administración, sí. */
 export type PerfilFalso = 'guarda' | 'admin'
@@ -54,11 +61,14 @@ export class SupabaseFalso {
   partes = new Map<string, Record<string, unknown>>()
   /** Cada envío de un parte que ha llegado al servidor, con su identificador. Incluye los repetidos. */
   envios: string[] = []
-  /** Lo que llega al servidor, en orden: «certificado <id>» o «parte <id>». */
+  /** Lo que llega al servidor, en orden: «certificado <id>», «parte <id>» o «foto <id>». */
   llegadas: string[] = []
   /** Los certificados guardados, por identificador, con su ficha. */
   certificados = new Map<string, Record<string, string | string[]>>()
+  /** Las fotos guardadas, por identificador: su parte y sus bytes tal como llegan. */
+  fotos = new Map<string, { parte: string; bytes: Buffer }>()
   modo: Modo = 'aceptar'
+  modoFotos: ModoFotos = 'aceptar'
   /** Peticiones que no sabe contestar. Si hay alguna, el test lo dice. */
   desconocidas: string[] = []
   private contexto?: BrowserContext
@@ -103,12 +113,21 @@ export class SupabaseFalso {
     }
 
     if (url.pathname === '/functions/v1/archivos' && peticion.method() === 'POST') {
-      // Como la función de verdad: repetir la subida del mismo documento no lo duplica.
-      const ficha = leerFormulario(peticion.postDataBuffer() ?? Buffer.alloc(0), peticion.headers()['content-type'] ?? '')
-      const id = String(ficha.id)
+      // Como la función de verdad: repetir la subida del mismo documento o de la misma foto no la duplica.
+      const { campos, archivo } = leerFormulario(peticion.postDataBuffer() ?? Buffer.alloc(0), peticion.headers()['content-type'] ?? '')
+      const id = String(campos.id)
+      if (campos.parte !== undefined) {
+        this.llegadas.push(`foto ${id}`)
+        if (this.modoFotos === 'fuera-de-plazo') {
+          return ruta.fulfill({ status: 403, headers: CORS, json: { error: 'Ese parte se recibió hace más de 7 días y ya no admite fotos.' } })
+        }
+        const yaEstaba = this.fotos.has(id)
+        if (!yaEstaba) this.fotos.set(id, { parte: String(campos.parte), bytes: archivo ?? Buffer.alloc(0) })
+        return ruta.fulfill({ status: yaEstaba ? 200 : 201, headers: CORS, json: { id, yaEstaba } })
+      }
       this.llegadas.push(`certificado ${id}`)
       const yaEstaba = this.certificados.has(id)
-      if (!yaEstaba) this.certificados.set(id, ficha)
+      if (!yaEstaba) this.certificados.set(id, campos)
       return ruta.fulfill({ status: yaEstaba ? 200 : 201, headers: CORS, json: { id, yaEstaba } })
     }
 
@@ -131,24 +150,47 @@ export class SupabaseFalso {
 }
 
 /**
- * Lee los campos de texto de un formulario multipart. De un archivo, guarda su nombre y su contenido como texto.
- * Basta para los PDF ficticios de los tests.
+ * Lee los campos de texto de un formulario multipart. De un archivo, guarda su nombre y su contenido como texto,
+ * que basta para los PDF ficticios de los tests, y aparte sus bytes, para las fotos.
  */
-function leerFormulario(cuerpo: Buffer, tipo: string): Record<string, string | string[]> {
+function leerFormulario(cuerpo: Buffer, tipo: string): { campos: Record<string, string | string[]>; archivo?: Buffer } {
   const frontera = tipo.match(/boundary=(.+)$/)?.[1]
   const campos: Record<string, string | string[]> = {}
-  if (!frontera) return campos
+  let bytes: Buffer | undefined
+  if (!frontera) return { campos }
   for (const parte of cuerpo.toString('latin1').split(`--${frontera}`)) {
     const [cabecera, ...resto] = parte.split('\r\n\r\n')
     const nombre = cabecera.match(/name="([^"]+)"/)?.[1]
     if (!nombre) continue
-    const valor = Buffer.from(resto.join('\r\n\r\n').replace(/\r\n$/, ''), 'latin1').toString('utf8')
+    const crudo = Buffer.from(resto.join('\r\n\r\n').replace(/\r\n$/, ''), 'latin1')
+    const valor = crudo.toString('utf8')
     const archivo = cabecera.match(/filename="([^"]*)"/)?.[1]
-    if (archivo !== undefined) { campos.nombre_archivo = Buffer.from(archivo, 'latin1').toString('utf8'); campos.contenido = valor; continue }
+    if (archivo !== undefined) {
+      campos.nombre_archivo = Buffer.from(archivo, 'latin1').toString('utf8')
+      campos.contenido = valor
+      bytes = crudo
+      continue
+    }
     const previo = campos[nombre]
     campos[nombre] = previo === undefined ? valor : [...[previo].flat(), valor]
   }
-  return campos
+  return { campos, archivo: bytes }
+}
+
+/** El ancho y el alto de un JPEG, leídos de su cabecera (el marcador SOF). */
+export function medidasJpeg(bytes: Buffer): { ancho: number; alto: number } | null {
+  let i = 2
+  while (i + 9 < bytes.length) {
+    if (bytes[i] !== 0xff) return null
+    const marcador = bytes[i + 1]
+    const largo = bytes.readUInt16BE(i + 2)
+    // SOF0 a SOF15, menos DHT (C4), JPG (C8) y DAC (CC), que no son cabeceras de imagen.
+    if (marcador >= 0xc0 && marcador <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marcador)) {
+      return { alto: bytes.readUInt16BE(i + 5), ancho: bytes.readUInt16BE(i + 7) }
+    }
+    i += 2 + largo
+  }
+  return null
 }
 
 /** Abre la web y espera a Inicio. */

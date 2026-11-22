@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { almacenEnMemoria, clasificar, Cola, type Resultado } from '../src/cola.ts'
-import type { Certificado, FilaParte } from '../src/parte.ts'
+import type { Certificado, FilaParte, Foto } from '../src/parte.ts'
 import { conRecuerdo } from '../src/recuerdo.ts'
 
 const fila = (id: string, fecha = '2026-11-16'): FilaParte => ({
@@ -61,6 +61,57 @@ describe('Cola', () => {
     await cola.reintentar('ana')
     expect(recibidos).toEqual(['%PDF-1.7 ficticio'])
     expect(almacen.datos.size).toBe(0)
+  })
+
+  it('si se corta la red a mitad, el siguiente intento solo envía lo que falta', async () => {
+    const almacen = almacenEnMemoria()
+    const certificado: Certificado = {
+      id: 'c1', archivo: new Blob(['%PDF-1.7 ficticio']), nombre: 'cert.pdf', titulo: 'Certificado', fecha: '2026-11-16', instalacion: 'i1',
+    }
+    const fotos: Foto[] = ['f1', 'f2', 'f3'].map(id => ({ id, archivo: new Blob(['jpeg']), nombre: `${id}.jpg` }))
+    const intentos: string[][] = []
+    let red = 3
+    // Llega el certificado, el parte y la primera foto, y se corta. Después llega todo.
+    const cola = new Cola(almacen, async (_f, c, fs = [], llega = async () => {}) => {
+      const enviado: string[] = []
+      intentos.push(enviado)
+      const paso = async (que: string, l: Parameters<typeof llega>[0]) => {
+        if (red-- <= 0) return false
+        enviado.push(que)
+        await llega(l)
+        return true
+      }
+      if (c && !(await paso('certificado', { que: 'certificado' }))) return { tipo: 'sin-conexion' }
+      if (!(await paso('parte', { que: 'parte' }))) return { tipo: 'sin-conexion' }
+      for (const f of fs) if (!(await paso(f.id, { que: 'foto', id: f.id }))) return { tipo: 'sin-conexion' }
+      return { tipo: 'enviado' }
+    })
+    expect(await cola.registrar('ana', { ...fila('p1'), certificado_id: 'c1' }, certificado, fotos)).toEqual({ tipo: 'sin-conexion' })
+    const guardado = almacen.datos.get('p1')
+    expect(guardado?.certificado).toBeUndefined()
+    expect(guardado?.parteLlegado).toBe(true)
+    expect(guardado?.fotos?.map(f => f.id)).toEqual(['f2', 'f3'])
+
+    red = 100
+    await cola.reintentar('ana')
+    // El certificado y la primera foto no se repiten. El parte sí, que no pesa y no se duplica.
+    expect(intentos).toEqual([['certificado', 'parte', 'f1'], ['parte', 'f2', 'f3']])
+    expect(almacen.datos.size).toBe(0)
+  })
+
+  it('si el parte llega pero una foto se rechaza, se queda con el aviso y la foto que falta', async () => {
+    const almacen = almacenEnMemoria()
+    const fotos: Foto[] = ['f1', 'f2'].map(id => ({ id, archivo: new Blob(['jpeg']), nombre: `${id}.jpg` }))
+    const cola = new Cola(almacen, async (_f, _c, _fs, llega = async () => {}) => {
+      await llega({ que: 'parte' })
+      await llega({ que: 'foto', id: 'f2' })
+      return { tipo: 'enviado', aviso: 'El parte ha llegado, pero una foto no.' }
+    })
+    expect(await cola.registrar('ana', fila('p1'), undefined, fotos)).toEqual({ tipo: 'enviado', aviso: 'El parte ha llegado, pero una foto no.' })
+    const { pendientes, rechazados } = await cola.recuento('ana')
+    expect(pendientes).toBe(0)
+    expect(rechazados.map(p => [p.parteLlegado, p.rechazo, p.fotos?.map(f => f.id)]))
+      .toEqual([[true, 'El parte ha llegado, pero una foto no.', ['f1']]])
   })
 
   it('con red, envía el parte y no lo deja en el móvil', async () => {

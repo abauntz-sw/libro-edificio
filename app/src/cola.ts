@@ -9,8 +9,12 @@
 //
 // Si la base de datos rechaza un parte (por ejemplo, porque la revisión ya no está a cargo de esa persona),
 // no se reintenta: se conserva con el motivo, para que la persona lo vea y decida.
+//
+// Un parte puede llevar un certificado y fotos, que pesan mucho más que el parte. Por eso, cada cosa
+// que llega se quita de lo guardado: si la cobertura se corta a mitad, el siguiente intento
+// solo envía lo que falta.
 
-import type { Certificado, FilaParte } from './parte.ts'
+import type { Certificado, FilaParte, Foto, Llegada } from './parte.ts'
 
 export interface Pendiente {
   /** El mismo identificador que el parte. */
@@ -18,8 +22,12 @@ export interface Pendiente {
   /** Quién lo escribió. En un móvil compartido, cada persona solo envía los suyos. */
   authId: string
   fila: FilaParte
-  /** El certificado, si lo lleva. Se envía antes que el parte. */
+  /** El certificado, si lo lleva y todavía no ha llegado. Se envía antes que el parte. */
   certificado?: Certificado
+  /** Las fotos que todavía no han llegado. Se envían después del parte. */
+  fotos?: Foto[]
+  /** Si el parte ya está en la base de datos. Entonces solo falta alguna foto. */
+  parteLlegado?: boolean
   /** Cuándo se guardó, en hora universal. */
   guardado: string
   /** Si la base de datos lo ha rechazado, por qué. Un parte rechazado no se reintenta solo. */
@@ -35,13 +43,17 @@ export interface Almacen {
 
 /** Lo que pasa al enviar un parte. */
 export type Resultado =
-  | { tipo: 'enviado' }
+  /** Ha llegado. Si una foto se ha rechazado, el aviso lo dice: el parte está, pero sin esa foto. */
+  | { tipo: 'enviado'; aviso?: string }
   /** No ha llegado, pero puede llegar más tarde: sin red, el servidor caído o la sesión por renovar. */
   | { tipo: 'sin-conexion' }
   /** La base de datos no lo acepta. Reintentar no lo arreglaría. */
   | { tipo: 'rechazado'; motivo: string }
 
-export type Enviar = (fila: FilaParte, certificado?: Certificado) => Promise<Resultado>
+/** Envía un parte con lo que lleva. Avisa con `llega` de cada cosa que llega. */
+export type Enviar = (
+  fila: FilaParte, certificado?: Certificado, fotos?: Foto[], llega?: (l: Llegada) => Promise<void>,
+) => Promise<Resultado>
 
 /** Error de Supabase, con lo que interesa aquí. */
 export interface ErrorSupabase {
@@ -104,8 +116,10 @@ export class Cola {
    * Guarda el parte en el móvil y lo intenta enviar.
    * Si guardarlo falla (sin espacio, modo privado), lo envía igualmente: mejor eso que perderlo.
    */
-  async registrar(authId: string, fila: FilaParte, certificado?: Certificado): Promise<Resultado> {
-    const pendiente: Pendiente = { id: fila.id, authId, fila, certificado, guardado: this.ahora().toISOString() }
+  async registrar(authId: string, fila: FilaParte, certificado?: Certificado, fotos: Foto[] = []): Promise<Resultado> {
+    const pendiente: Pendiente = {
+      id: fila.id, authId, fila, certificado, fotos: fotos.length > 0 ? fotos : undefined, guardado: this.ahora().toISOString(),
+    }
     let guardado = true
     try {
       await this.almacen.poner(pendiente)
@@ -114,16 +128,33 @@ export class Cola {
     }
     this.avisar()
     await this.enMarcha
-    const resultado = await this.enviar(fila, certificado)
-    if (resultado.tipo === 'enviado') {
-      if (guardado) await this.almacen.quitar(fila.id)
-    } else if (resultado.tipo === 'rechazado') {
-      if (guardado) await this.almacen.poner({ ...pendiente, rechazo: resultado.motivo })
-    } else if (!guardado) {
+    const resultado = await this.intentar(pendiente, guardado)
+    if (resultado.tipo === 'sin-conexion' && !guardado) {
       // Sin red y sin poder guardarlo: la persona tiene que saberlo para no irse creyendo que está.
       return { tipo: 'rechazado', motivo: 'No hay conexión y este móvil no deja guardar el parte. Copia lo que has escrito y envíalo cuando haya cobertura.' }
     }
     this.avisar()
+    return resultado
+  }
+
+  /**
+   * Envía un pendiente y deja lo guardado como corresponde: lo quita si ha llegado entero,
+   * le pone el motivo si se ha rechazado algo, y si se corta la red, deja solo lo que falta.
+   */
+  private async intentar(p: Pendiente, guardado = true): Promise<Resultado> {
+    let actual = p
+    const llega = async (l: Llegada) => {
+      if (l.que === 'certificado') actual = { ...actual, certificado: undefined }
+      else if (l.que === 'parte') actual = { ...actual, parteLlegado: true }
+      else actual = { ...actual, fotos: actual.fotos?.filter(f => f.id !== l.id) }
+      // Si no se puede apuntar, no pasa nada: en el siguiente intento se reenvía, y no se duplica.
+      if (guardado) await this.almacen.poner(actual).catch(() => {})
+    }
+    const resultado = await this.enviar(p.fila, p.certificado, p.fotos, llega)
+    if (!guardado) return resultado
+    if (resultado.tipo === 'enviado' && !resultado.aviso) await this.almacen.quitar(p.id)
+    else if (resultado.tipo === 'enviado') await this.almacen.poner({ ...actual, rechazo: resultado.aviso })
+    else if (resultado.tipo === 'rechazado') await this.almacen.poner({ ...actual, rechazo: resultado.motivo })
     return resultado
   }
 
@@ -137,10 +168,8 @@ export class Cola {
     const todos = await this.almacen.todos()
     const suyos = todos.filter(p => p.authId === authId && !p.rechazo).sort((a, b) => a.guardado.localeCompare(b.guardado))
     for (const p of suyos) {
-      const resultado = await this.enviar(p.fila, p.certificado)
+      const resultado = await this.intentar(p)
       if (resultado.tipo === 'sin-conexion') return
-      if (resultado.tipo === 'enviado') await this.almacen.quitar(p.id)
-      else await this.almacen.poner({ ...p, rechazo: resultado.motivo })
       this.avisar()
     }
   }

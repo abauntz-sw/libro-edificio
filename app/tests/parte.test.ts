@@ -1,8 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { describe, expect, it } from 'vitest'
+import { medidas } from '../src/fotos.ts'
 import {
   BORRADOR_VACIO, type Borrador, type Certificado, clasificarFuncion, enviarParte, faltaEnParte, filaParte, formularioCertificado,
-  hoyLocal, leerCertificado, puedeAdjuntarCertificado, type Revision, revisionesDe, sumarMeses, tiposDe, tituloCertificado,
+  formularioFoto, type Foto, hoyLocal, type Llegada, leerCertificado, loQueLleva, puedeAdjuntarCertificado, type Revision,
+  revisionesDe, sumarMeses, tiposDe, tituloCertificado,
 } from '../src/parte.ts'
 
 const guarda = 'c-guarda'
@@ -145,13 +147,42 @@ describe('clasificarFuncion', () => {
   })
 })
 
-/** Un Supabase de mentira que apunta, en orden, qué le llega: el certificado y el parte. */
-function supabaseDeMentira(errorCertificado?: object) {
+describe('fotos', () => {
+  it('se reducen a 1600 píxeles por el lado largo, sin deformarse', () => {
+    expect(medidas(4000, 3000)).toEqual({ ancho: 1600, alto: 1200 })
+    expect(medidas(3000, 4000)).toEqual({ ancho: 1200, alto: 1600 })
+  })
+  it('una foto pequeña no se agranda', () => {
+    expect(medidas(800, 600)).toEqual({ ancho: 800, alto: 600 })
+  })
+  it('se envían con su identificador y el de su parte, sin el nombre original', () => {
+    const datos = formularioFoto({ id: 'f1', archivo: new Blob(['jpeg']), nombre: 'IMG_0042 de Ana.jpg' }, 'p1')
+    expect([datos.get('id'), datos.get('parte')]).toEqual(['f1', 'p1'])
+    expect((datos.get('archivo') as File).name).toBe('f1.jpg')
+  })
+  it('los mensajes dicen lo que lleva el parte', () => {
+    expect(loQueLleva(false, 0)).toBe('')
+    expect(loQueLleva(true, 0)).toBe('su certificado')
+    expect(loQueLleva(false, 1)).toBe('una foto')
+    expect(loQueLleva(true, 3)).toBe('su certificado y 3 fotos')
+  })
+})
+
+/**
+ * Un Supabase de mentira que apunta, en orden, qué le llega: el certificado, el parte y las fotos.
+ * `errores` dice qué responde la función a un identificador, en vez de bien.
+ */
+function supabaseDeMentira(errorCertificado?: object, errores: Record<string, object> = {}) {
   const llegadas: string[] = []
   const supabase = {
     functions: {
       invoke: async (_nombre: string, { body }: { body: FormData }) => {
-        llegadas.push(`certificado ${body.get('id')}`)
+        const id = String(body.get('id'))
+        if (body.has('parte')) {
+          llegadas.push(`foto ${id} de ${body.get('parte')}`)
+          return { error: errores[id] ?? null }
+        }
+        llegadas.push(`certificado ${id}`)
         return { error: errorCertificado ?? null }
       },
     },
@@ -180,5 +211,39 @@ describe('enviarParte', () => {
     const { supabase, llegadas } = supabaseDeMentira()
     await enviarParte(supabase, filaParte('p2', listo, undefined, hoy))
     expect(llegadas).toEqual(['parte p2'])
+  })
+
+  const foto = (id: string): Foto => ({ id, archivo: new Blob(['jpeg']), nombre: `${id}.jpg` })
+
+  it('las fotos van después del parte, una a una, y avisa de cada cosa que llega', async () => {
+    const { supabase, llegadas } = supabaseDeMentira()
+    const avisos: Llegada[] = []
+    const r = await enviarParte(supabase, fila, certificado, [foto('f1'), foto('f2')], async l => { avisos.push(l) })
+    expect(r).toEqual({ tipo: 'enviado' })
+    expect(llegadas).toEqual(['certificado c1', 'parte p1', 'foto f1 de p1', 'foto f2 de p1'])
+    expect(avisos).toEqual([{ que: 'certificado' }, { que: 'parte' }, { que: 'foto', id: 'f1' }, { que: 'foto', id: 'f2' }])
+  })
+  it('si se corta la red en una foto, para ahí: las que faltan van en el siguiente intento', async () => {
+    const { supabase, llegadas } = supabaseDeMentira(undefined, { f1: errorFuncion(503) })
+    const avisos: Llegada[] = []
+    const r = await enviarParte(supabase, filaParte('p2', listo, undefined, hoy), undefined, [foto('f1'), foto('f2')], async l => { avisos.push(l) })
+    expect(r).toEqual({ tipo: 'sin-conexion' })
+    expect(llegadas).toEqual(['parte p2', 'foto f1 de p2'])
+    expect(avisos).toEqual([{ que: 'parte' }])
+  })
+  it('si se rechaza una foto, el parte cuenta como enviado, con un aviso, y siguen las demás', async () => {
+    const plazo = errorFuncion(403, { error: 'Ese parte se recibió hace más de 7 días y ya no admite fotos.' })
+    const { supabase, llegadas } = supabaseDeMentira(undefined, { f1: plazo })
+    const r = await enviarParte(supabase, filaParte('p2', listo, undefined, hoy), undefined, [foto('f1'), foto('f2')])
+    expect(r).toEqual({
+      tipo: 'enviado',
+      aviso: 'El parte ha llegado, pero una foto no. Motivo: Ese parte se recibió hace más de 7 días y ya no admite fotos.',
+    })
+    expect(llegadas).toEqual(['parte p2', 'foto f1 de p2', 'foto f2 de p2'])
+  })
+  it('si el parte no llega, las fotos no se envían', async () => {
+    const { supabase, llegadas } = supabaseDeMentira(errorFuncion(503))
+    expect(await enviarParte(supabase, fila, certificado, [foto('f1')])).toEqual({ tipo: 'sin-conexion' })
+    expect(llegadas).toEqual(['certificado c1'])
   })
 })

@@ -1,4 +1,4 @@
-// Registrar un parte de trabajo (tarea 1.6, sin fotos todavía).
+// Registrar un parte de trabajo (tarea 1.6).
 //
 // El parte se inserta en la tabla `partes`. La base de datos pone sola el edificio, el autor y la empresa,
 // y comprueba que cada perfil registre solo lo suyo. Si el parte cierra una revisión, la base de datos
@@ -7,6 +7,9 @@
 // El certificado, si lo hay, es un PDF que se archiva como documento con la función «archivos»,
 // antes que el parte: el parte lo apunta en `certificado_id`, y la base de datos no deja apuntar
 // un documento que todavía no existe.
+//
+// Las fotos van al revés: después del parte, una a una, porque cada foto apunta a su parte.
+// Se comprimen en el móvil al elegirlas (ver fotos.ts).
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Perfil } from './acceso.ts'
@@ -163,14 +166,15 @@ export function formularioCertificado(c: Certificado): FormData {
  * Decide si un fallo de la función «archivos» es pasajero o definitivo, como `clasificar` con la base de datos.
  * Sin respuesta, es la red. 401 es la sesión, que se renueva sola; 408, 429 y los 5xx, el servidor.
  * El resto (sin permiso, no es un PDF, demasiado grande) no se arregla reintentando.
+ * `que` dice qué no ha llegado, para empezar el motivo.
  */
-export async function clasificarFuncion(error: unknown): Promise<Resultado> {
+export async function clasificarFuncion(error: unknown, que = 'El certificado no se ha podido archivar'): Promise<Resultado> {
   const respuesta: unknown = (error as { context?: unknown } | null)?.context
   if (!(respuesta instanceof Response)) return { tipo: 'sin-conexion' }
   const { status } = respuesta
   if (status === 401 || status === 408 || status === 429 || status >= 500) return { tipo: 'sin-conexion' }
   const cuerpo = await respuesta.json().catch(() => null) as { error?: string } | null
-  return { tipo: 'rechazado', motivo: `El certificado no se ha podido archivar: ${cuerpo?.error ?? `la función respondió ${status}`}` }
+  return { tipo: 'rechazado', motivo: `${que}: ${cuerpo?.error ?? `la función respondió ${status}`}` }
 }
 
 /** Archiva el certificado. Si ya estaba (el mismo identificador y el mismo archivo), la función no hace nada. */
@@ -183,6 +187,46 @@ export async function subirCertificado(supabase: SupabaseClient, c: Certificado)
     return { tipo: 'sin-conexion' }
   }
 }
+
+/** Una foto de un parte, tal como se guarda en el móvil hasta que llega. */
+export interface Foto {
+  /** El identificador de la foto. Se crea al elegirla: si el envío se repite, no se duplica. */
+  id: string
+  /** La foto ya comprimida, en JPEG. */
+  archivo: Blob
+  /** El nombre del archivo elegido, para que la persona la reconozca. No se envía. */
+  nombre: string
+}
+
+/** El formulario que espera la función «archivos» para una foto: la foto, su identificador y su parte. */
+export function formularioFoto(f: Foto, parte: string): FormData {
+  const datos = new FormData()
+  datos.append('archivo', f.archivo, `${f.id}.jpg`)
+  datos.append('id', f.id)
+  datos.append('parte', parte)
+  return datos
+}
+
+/** Sube una foto de un parte que ya ha llegado. Si ya estaba, la función no hace nada. */
+export async function subirFoto(supabase: SupabaseClient, f: Foto, parte: string): Promise<Resultado> {
+  try {
+    const { error } = await supabase.functions.invoke('archivos', { body: formularioFoto(f, parte), timeout: 60_000 })
+    return error ? await clasificarFuncion(error, 'Motivo') : { tipo: 'enviado' }
+  } catch {
+    return { tipo: 'sin-conexion' }
+  }
+}
+
+/** Lo que acompaña al parte, para los mensajes: «su certificado y 2 fotos». Vacío si no lleva nada. */
+export function loQueLleva(certificado: boolean, fotos: number): string {
+  const cosas: string[] = []
+  if (certificado) cosas.push('su certificado')
+  if (fotos > 0) cosas.push(fotos === 1 ? 'una foto' : `${fotos} fotos`)
+  return cosas.join(' y ')
+}
+
+/** Lo que ya ha llegado de un parte, para que la cola no lo vuelva a enviar. */
+export type Llegada = { que: 'certificado' } | { que: 'parte' } | { que: 'foto'; id: string }
 
 /** Las instalaciones que la persona ve, menos las que no aplican, y las revisiones previstas. */
 export async function leerDatosParte(supabase: SupabaseClient): Promise<{ instalaciones: Instalacion[]; revisiones: Revision[] }> {
@@ -199,23 +243,47 @@ export async function leerDatosParte(supabase: SupabaseClient): Promise<{ instal
 export type FilaParte = ReturnType<typeof filaParte>
 
 /**
- * Envía el parte, y antes su certificado si lo lleva. Si ya había llegado (el mismo identificador),
- * no hace nada: `on conflict do nothing`.
+ * Envía el parte: antes su certificado, si lo lleva, y después sus fotos. Si el parte ya había llegado
+ * (el mismo identificador), la base de datos no hace nada: `on conflict do nothing`. Con el certificado
+ * y las fotos pasa lo mismo en la función «archivos».
+ *
  * Dice si ha llegado, si hay que reintentarlo más tarde o si la base de datos lo rechaza.
+ * Cada cosa que llega se avisa con `llega`, para que la cola no la vuelva a enviar.
+ *
+ * Si el parte llega pero una foto se rechaza, el parte cuenta como enviado, con un aviso:
+ * el parte ya está en la base de datos y reintentar no arreglaría la foto.
  */
-export async function enviarParte(supabase: SupabaseClient, fila: FilaParte, certificado?: Certificado): Promise<Resultado> {
+export async function enviarParte(
+  supabase: SupabaseClient, fila: FilaParte, certificado?: Certificado, fotos: Foto[] = [],
+  llega: (l: Llegada) => Promise<void> = async () => {},
+): Promise<Resultado> {
   if (certificado) {
     const resultado = await subirCertificado(supabase, certificado)
     if (resultado.tipo !== 'enviado') return resultado
+    await llega({ que: 'certificado' })
   }
   try {
     // Con una raya de cobertura, una petición puede quedarse colgada. A los 20 segundos se da por no llegada.
     // Si en realidad llegó, reenviarla no duplica nada.
     const { error } = await supabase.from('partes').upsert(fila, { onConflict: 'id', ignoreDuplicates: true })
       .abortSignal(AbortSignal.timeout(20_000))
-    return error ? clasificar(error) : { tipo: 'enviado' }
+    if (error) return clasificar(error)
   } catch {
     // Sin red, la librería a veces lanza en vez de devolver el error.
     return { tipo: 'sin-conexion' }
   }
+  await llega({ que: 'parte' })
+
+  const rechazos: string[] = []
+  for (const foto of fotos) {
+    const resultado = await subirFoto(supabase, foto, fila.id)
+    // Sin red, se para: las que faltan se envían en el siguiente intento.
+    if (resultado.tipo === 'sin-conexion') return resultado
+    if (resultado.tipo === 'rechazado') rechazos.push(resultado.motivo)
+    else await llega({ que: 'foto', id: foto.id })
+  }
+  if (rechazos.length === 0) return { tipo: 'enviado' }
+  const cuantas = rechazos.length === 1 ? 'una foto no' : `${rechazos.length} fotos no`
+  // Los motivos suelen ser el mismo (por ejemplo, el plazo): basta con decirlo una vez.
+  return { tipo: 'enviado', aviso: `El parte ha llegado, pero ${cuantas}. ${[...new Set(rechazos)].join(' ')}` }
 }

@@ -22,7 +22,8 @@ export function Inicio({ supabase, authId }: { supabase: SupabaseClient; authId:
   const [intento, setIntento] = useState(0)
   const [pantalla, setPantalla] = useState<'inicio' | 'huecos' | 'subir' | 'parte'>('inicio')
   // La cola de partes de este móvil. Ver cola.ts.
-  const cola = useMemo(() => new Cola(almacenIndexedDB(), (fila, certificado) => enviarParte(supabase, fila, certificado)), [supabase])
+  const cola = useMemo(() => new Cola(almacenIndexedDB(),
+    (fila, certificado, fotos, llega) => enviarParte(supabase, fila, certificado, fotos, llega)), [supabase])
   const [recuento, setRecuento] = useState<Recuento>({ pendientes: 0, rechazados: [] })
 
   useEffect(() => {

@@ -18,6 +18,9 @@ export interface Registro extends Ficha {
   commit: string | null
 }
 
+/** Lo que hace falta de un parte para nombrar sus fotos. La instalación es null si esa persona no la ve. */
+export interface Parte { fecha: string; instalacion: string | null }
+
 export interface FotoGuardada { ruta: string; sha256: string; parte: string }
 
 /** Lo que se apunta de una foto al registrarla. */
@@ -35,13 +38,13 @@ export interface Libro {
   edificio(): Promise<Edificio | null>
   puedoArchivar(instalaciones: string[]): Promise<boolean>
   existeTipo(tipo: string): Promise<boolean>
-  /** Cuántas de esas instalaciones existen y son de su edificio. */
-  cuentaInstalaciones(ids: string[]): Promise<number>
+  /** Los nombres de esas instalaciones que existen y son de su edificio. Si falta alguno, alguna no vale. */
+  nombresInstalaciones(ids: string[]): Promise<string[]>
   /** El documento, o null si no existe o si esa persona no puede verlo. */
   documento(id: string): Promise<DocumentoGuardado | null>
   registrar(registro: Registro): Promise<void>
-  /** La fecha del parte, o null si no existe o si esa persona no puede verlo. */
-  fechaParte(id: string): Promise<string | null>
+  /** La fecha del parte y el nombre de su instalación, o null si no existe o si esa persona no puede verlo. */
+  parte(id: string): Promise<Parte | null>
   /** Solo quien escribió el parte puede añadirle fotos, y hasta 7 días después de recibirlo. */
   puedoAdjuntarFoto(parte: string): Promise<boolean>
   /** Si quien escribió el parte ya no puede añadirle fotos por el plazo. A los demás, siempre false. */
@@ -70,6 +73,13 @@ export function crearLibro(url: string, clavePublica: string, autorizacion: stri
     throw new Error(`La base de datos ha fallado (${error.code ?? estado}): ${error.message}`)
   }
 
+  async function nombresInstalaciones(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return []
+    const { data, error, status } = await cliente.from('instalaciones').select('nombre').in('id', ids)
+    if (error) fallo(error, status)
+    return (data ?? []).map(fila => fila.nombre)
+  }
+
   return {
     async edificio() {
       const { data, error, status } = await cliente.from('edificios').select('id, repositorio').maybeSingle()
@@ -89,12 +99,7 @@ export function crearLibro(url: string, clavePublica: string, autorizacion: stri
       return data !== null
     },
 
-    async cuentaInstalaciones(ids) {
-      if (ids.length === 0) return 0
-      const { data, error, status } = await cliente.from('instalaciones').select('id').in('id', ids)
-      if (error) fallo(error, status)
-      return data?.length ?? 0
-    },
+    nombresInstalaciones,
 
     async documento(id) {
       const { data, error, status } = await cliente
@@ -121,10 +126,12 @@ export function crearLibro(url: string, clavePublica: string, autorizacion: stri
       if (error) fallo(error, status)
     },
 
-    async fechaParte(id) {
-      const { data, error, status } = await cliente.from('partes').select('fecha').eq('id', id).maybeSingle()
+    async parte(id) {
+      const { data, error, status } = await cliente.from('partes').select('fecha, instalacion_id').eq('id', id).maybeSingle()
       if (error) fallo(error, status)
-      return data?.fecha ?? null
+      if (!data) return null
+      const nombres = await nombresInstalaciones([data.instalacion_id])
+      return { fecha: data.fecha, instalacion: nombres[0] ?? null }
     },
 
     async puedoAdjuntarFoto(parte) {

@@ -153,14 +153,14 @@ docs/                  ← planes, guía y decisiones
 Estructura del repositorio de cada edificio. La escribe la aplicación:
 
 ```text
-documentos/2026/<id>.pdf
-fotos/2026/<id>.jpg
+documentos/2026/2026-11-21_certificado_revision-de-la-caldera_<id>.pdf
+fotos/2026/2026-11-21_extintores_<id>.jpg
 firmas/2026/<id>.png
 indice/                ← exportación diaria en CSV
 README.md              ← explica cómo leer el archivo sin la aplicación
 ```
 
-Los nombres no llevan títulos ni datos personales. El nombre recibido y el título están en la ficha.
+Los nombres se entienden sin la aplicación: la fecha, el tipo, una descripción corta sacada del título (o la instalación, si el título no dice nada) y el identificador completo al final, para que nunca se repitan. Se deciden al archivar y no cambian si luego se corrige la ficha. El nombre recibido y el título completo están en la ficha.
 
 ### 5.3 Stack
 

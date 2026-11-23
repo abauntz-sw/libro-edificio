@@ -52,9 +52,15 @@ test('una fila correcta sale con su identificador, su ruta y sus instalaciones',
   expect(documentos).toHaveLength(1)
   const doc = documentos[0]
   expect(doc.fila).toBe(2)
-  expect(doc.ruta).toBe(`documentos/2026/${doc.id}.pdf`)
+  // El nombre legible, el mismo que pone la función de archivos (#77).
+  expect(doc.ruta).toBe(`documentos/2026/2026-03-10_certificado_un-certificado_${doc.id}.pdf`)
   expect(doc.instalaciones).toEqual(['6b41b002-871c-5df7-b85d-ace98b9d56af'])
   expect(doc.caduca).toBe('2027-03-10')
+})
+
+test('si el título no dice nada, la ruta lleva el nombre de la instalación', () => {
+  const { documentos } = comprobarListado([fila({ titulo: 'scan0015', extension: 'docx' })], catalogo())
+  expect(documentos[0].ruta).toBe(`documentos/2026/2026-03-10_certificado_proteccion-contra-incendios_${documentos[0].id}.docx`)
 })
 
 test('solo se procesan las filas con «si»', () => {

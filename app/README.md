@@ -35,8 +35,9 @@ Para anotar una intervención desde el móvil en menos de un minuto. Lo ven la a
    - Si no la tiene, pide la próxima fecha, que tiene que ser posterior a hoy.
 3. **¿Qué has hecho?** Solo los tipos de ese perfil: la guarda, comprobación o incidencia; las empresas, preventivo, reparación, inspección o urgencia.
 4. **Una frase**.
-5. **Añadir certificado**, si se quiere. Solo para la administración y las empresas: la guarda no archiva documentos. Un PDF de hasta 25 MB.
-6. **Enviar parte**.
+5. **Añadir foto**, si se quiere. Todos los que registran partes, también la guarda. Hasta 5 fotos, que se pueden quitar antes de enviar.
+6. **Añadir certificado**, si se quiere. Solo para la administración y las empresas: la guarda no archiva documentos. Un PDF de hasta 25 MB.
+7. **Enviar parte**.
 
 El parte se guarda en la tabla `partes`, con la fecha de hoy del aparato. La base de datos pone el edificio, el autor y la empresa, y vuelve a comprobar que ese perfil pueda registrarlo.
 
@@ -46,13 +47,16 @@ Un parte no se cambia ni se borra. Una corrección es un parte nuevo.
 
 El certificado se archiva como documento de tipo «Certificado», de la instalación del parte, con la función `archivos`. Va antes que el parte, porque el parte lo apunta en `certificado_id` y la base de datos no deja apuntar un documento que no existe. Su identificador se crea al elegir el archivo, así que reenviarlo tampoco duplica nada. Si el certificado no se puede archivar (por ejemplo, porque no es un PDF), el parte tampoco se envía, y la pantalla dice por qué.
 
-Todavía no lleva fotos: llegarán en un paso siguiente.
+Las fotos se comprimen en el móvil al elegirlas: se reducen a 1600 píxeles por el lado largo y se pasan a JPEG. Así una foto de varios MB se queda en unos cientos de KB, y de paso pierde los datos que llevaba dentro, como el lugar donde se hizo. Se envían con la función `archivos` **después del parte**, una a una, porque cada foto apunta a su parte. Cada una tiene su identificador, creado al elegirla, así que reenviarla no la duplica.
+
+Si el parte llega pero una foto no se acepta (por ejemplo, porque el parte se recibió hace más de 7 días), el parte se queda como está y la pantalla lo dice. En Inicio queda el aviso, hasta que la persona lo descarta.
 
 ## Sin cobertura
 
 En el refugio a menudo no hay red. Ningún parte se pierde por eso:
 
-1. **El parte se guarda primero en el móvil**, en IndexedDB, con una copia de su certificado si lo lleva, y luego se envía. Solo se borra del móvil cuando la base de datos lo ha aceptado.
+1. **El parte se guarda primero en el móvil**, en IndexedDB, con una copia de su certificado y de sus fotos si las lleva, y luego se envía. Solo se borra del móvil cuando ha llegado todo.
+   Cada cosa que llega se quita de lo guardado: si la red se corta a mitad, el siguiente intento solo envía lo que falta.
 2. **Si no hay red**, la pantalla lo dice y el parte queda pendiente. En Inicio se ve cuántos quedan, con un botón «Enviar ahora».
 3. **Se reintenta solo** al abrir la aplicación, al volver la conexión y al volver a la pestaña. No se depende de que el navegador envíe en segundo plano, porque Safari, en iPhone, no lo hace.
 4. **Nunca se duplica.** El identificador del parte lo crea el móvil, y la base de datos ignora uno que ya tiene. Da igual si la respuesta se perdió por el camino.

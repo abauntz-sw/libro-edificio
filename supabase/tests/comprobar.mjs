@@ -268,13 +268,31 @@ const d6 = '99999999-9999-4999-8999-999999999996'
 const archivarEn = ruta => filas(`select public.registrar_documento(
   $1, 'certificado', 'Prueba', '2026-11-06', 'Emisor', $2, 'a.pdf', repeat('a', 64), $3::uuid[]) as id`,
   [d6, ruta, [calefaccion]])
-for (const ruta of ['indice/documentos.csv', 'README.md', `fotos/2026/${d6}.jpg`, `documentos/2026/${d1}.pdf`, `documentos/2026/../../indice/${d6}.pdf`]) {
+for (const ruta of [
+  'indice/documentos.csv', 'README.md', `fotos/2026/${d6}.jpg`, `documentos/2026/${d1}.pdf`, `documentos/2026/../../indice/${d6}.pdf`,
+  // Con el nombre legible (#77): lo de delante del identificador tiene una forma fija.
+  `documentos/2026/2026-11-06_certificado_${d1}.pdf`, `documentos/2026/certificado_${d6}.pdf`,
+  `documentos/2026/2026-11-06_Certificado_${d6}.pdf`, `documentos/2026/2026-11-06_certificado_../../indice_${d6}.pdf`,
+  `documentos/2026/2026-11-06_a_b_c_${d6}.pdf`,
+]) {
   await como('calor', async () => ok(await falla(() => archivarEn(ruta)), `empresa no archiva una ficha con la ruta ${ruta}`))
 }
 await como('calor', async () => {
   await archivarEn(`documentos/2026/${d6}.docx`)
   ok(await cuenta('select 1 from public.documentos where id = $1', [d6]) === 1, 'se archiva un documento que no es PDF')
 })
+// El nombre legible (#77), con y sin descripción. Cada uno con su identificador: si uno fallara, no arrastraría al otro.
+for (const [d, nombre] of [
+  ['99999999-9999-4999-8999-999999999997', 'certificado_revision-de-la-caldera_'],
+  ['99999999-9999-4999-8999-999999999998', 'certificado_'],
+]) {
+  await como('calor', async () => {
+    await filas(`select public.registrar_documento(
+      $1, 'certificado', 'Prueba', '2026-11-06', 'Emisor', $2, 'a.pdf', repeat('a', 64), $3::uuid[]) as id`,
+      [d, `documentos/2026/2026-11-06_${nombre}${d}.pdf`, [calefaccion]])
+    ok(await cuenta('select 1 from public.documentos where id = $1', [d]) === 1, `se archiva con el nombre legible 2026-11-06_${nombre}<id>.pdf`)
+  })
+}
 const doc = await id('documentos', 'titulo', 'Revisión anual de extintores')
 await como('admin', async () => {
   await db.query('update public.documentos set eliminado_en = now() where id = $1', [doc])
@@ -433,6 +451,11 @@ await como('guarda', async () => {
   ok(await puedoAdjuntar() === true, 'quien escribió el parte puede adjuntarle fotos')
   await ponerFoto(foto1)
   ok(await cuenta('select 1 from public.parte_fotos where id = $1', [foto1]) === 1, 'y la foto queda apuntada')
+  // El nombre legible (#77), con la instalación y sin ella (fotos sin parte, #82).
+  for (const [f, nombre] of [['88888888-8888-4888-8888-888888888813', `${hoy}_extintores_`], ['88888888-8888-4888-8888-888888888814', `${hoy}_`]]) {
+    await ponerFoto(f, `fotos/2026/${nombre}${f}.jpg`)
+    ok(await cuenta('select 1 from public.parte_fotos where id = $1', [f]) === 1, `una foto se apunta con el nombre legible ${nombre.replace(hoy, '<fecha>')}<id>.jpg`)
+  }
 }, { guardar: true })
 await como('guarda', async () => {
   // Cada caso con su propio identificador: si uno entrara por error, no haría fallar a los siguientes.
@@ -442,6 +465,9 @@ await como('guarda', async () => {
     f => `documentos/2026/${f}.pdf`,
     f => `fotos/2026/${f}.png`,
     f => `fotos/2026/../${f}.jpg`,
+    f => `fotos/2026/2026-11-06_extintores_${foto1}.jpg`,
+    f => `fotos/2026/extintores_${f}.jpg`,
+    f => `fotos/2026/2026-11-06_a_b_${f}.jpg`,
   ]
   for (const [i, ruta] of rutas.entries()) {
     const f = `88888888-8888-4888-8888-88888888882${i}`

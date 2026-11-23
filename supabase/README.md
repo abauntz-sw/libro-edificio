@@ -14,6 +14,7 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261116000100_documento_repetido.sql` | Un identificador que ya existe solo se da por bueno si es el mismo archivo |
 | `migrations/20261116000200_permisos_cerrados_por_defecto.sql` | Hace que las tablas y funciones nuevas nazcan cerradas para la clave pública |
 | `migrations/20261118000000_fotos_de_parte.sql` | Una foto de un parte solo apunta a su propio archivo, en `fotos/`. Las fotos se añaden hasta 7 días después de recibir el parte, y `recibido_en` lo pone la base de datos. Añade `puedo_adjuntar_foto` y `foto_fuera_de_plazo`, para la función de archivos |
+| `migrations/20261123000000_nombres_legibles.sql` | Las rutas de los documentos y las fotos admiten el nombre legible, con la fecha y una descripción delante del identificador. Las de antes siguen valiendo |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |
@@ -84,6 +85,6 @@ Para ver qué tiene apuntado el proyecto: `npx -y supabase@3.1.0 migration list 
 - **Clave pública:** puede estar en la aplicación. Sin un usuario activo no da acceso a nada.
 - **Cambios de tablas:** cada cambio es una migración nueva. No edites una que ya esté aplicada.
 - **Permisos:** todo cambio de permisos lleva su comprobación en `tests/comprobar.mjs`.
-- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo. Su ruta es siempre `documentos/AAAA/<id>.<extensión>`: una ficha no puede apuntar a otro archivo del repositorio.
+- **Documentos:** se crean con `registrar_documento`, no con un `insert` directo. Su ruta es `documentos/AAAA/<fecha>_<tipo>_<descripción>_<id>.<extensión>`, o la de antes, `documentos/AAAA/<id>.<extensión>`. Siempre acaba en su propio identificador: una ficha no puede apuntar a otro archivo del repositorio.
 - **Tablas y funciones nuevas:** nacen cerradas para la clave pública, y las funciones no las puede ejecutar nadie más que su dueño. Cada migración que cree una debe dar solo los permisos necesarios, por ejemplo `grant execute ... to authenticated`. Las tablas nuevas de `public` siguen abiertas por defecto para `authenticated`: la seguridad por filas manda. `comprobar.mjs` avisa si algo queda abierto a la clave pública.
 - **Partes:** no se cambian ni se borran. Una corrección es un parte nuevo.

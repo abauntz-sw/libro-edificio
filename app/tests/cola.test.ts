@@ -72,7 +72,7 @@ describe('Cola', () => {
     const intentos: string[][] = []
     let red = 3
     // Llega el certificado, el parte y la primera foto, y se corta. Después llega todo.
-    const cola = new Cola(almacen, async (_f, c, fs = [], llega = async () => {}) => {
+    const cola = new Cola(almacen, async (_f, c, fs = [], llega = async () => {}, parteLlegado = false) => {
       const enviado: string[] = []
       intentos.push(enviado)
       const paso = async (que: string, l: Parameters<typeof llega>[0]) => {
@@ -82,7 +82,7 @@ describe('Cola', () => {
         return true
       }
       if (c && !(await paso('certificado', { que: 'certificado' }))) return { tipo: 'sin-conexion' }
-      if (!(await paso('parte', { que: 'parte' }))) return { tipo: 'sin-conexion' }
+      if (!parteLlegado && !(await paso('parte', { que: 'parte' }))) return { tipo: 'sin-conexion' }
       for (const f of fs) if (!(await paso(f.id, { que: 'foto', id: f.id }))) return { tipo: 'sin-conexion' }
       return { tipo: 'enviado' }
     })
@@ -94,8 +94,8 @@ describe('Cola', () => {
 
     red = 100
     await cola.reintentar('ana')
-    // El certificado y la primera foto no se repiten. El parte sí, que no pesa y no se duplica.
-    expect(intentos).toEqual([['certificado', 'parte', 'f1'], ['parte', 'f2', 'f3']])
+    // No se repite nada de lo que ya llegó: ni el certificado, ni el parte, ni la primera foto.
+    expect(intentos).toEqual([['certificado', 'parte', 'f1'], ['f2', 'f3']])
     expect(almacen.datos.size).toBe(0)
   })
 

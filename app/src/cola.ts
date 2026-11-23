@@ -50,9 +50,12 @@ export type Resultado =
   /** La base de datos no lo acepta. Reintentar no lo arreglaría. */
   | { tipo: 'rechazado'; motivo: string }
 
-/** Envía un parte con lo que lleva. Avisa con `llega` de cada cosa que llega. */
+/**
+ * Envía un parte con lo que lleva. Avisa con `llega` de cada cosa que llega.
+ * Con `parteLlegado`, el parte ya está en la base de datos y solo se envían las fotos.
+ */
 export type Enviar = (
-  fila: FilaParte, certificado?: Certificado, fotos?: Foto[], llega?: (l: Llegada) => Promise<void>,
+  fila: FilaParte, certificado?: Certificado, fotos?: Foto[], llega?: (l: Llegada) => Promise<void>, parteLlegado?: boolean,
 ) => Promise<Resultado>
 
 /** Error de Supabase, con lo que interesa aquí. */
@@ -150,7 +153,7 @@ export class Cola {
       // Si no se puede apuntar, no pasa nada: en el siguiente intento se reenvía, y no se duplica.
       if (guardado) await this.almacen.poner(actual).catch(() => {})
     }
-    const resultado = await this.enviar(p.fila, p.certificado, p.fotos, llega)
+    const resultado = await this.enviar(p.fila, p.certificado, p.fotos, llega, p.parteLlegado)
     if (!guardado) return resultado
     if (resultado.tipo === 'enviado' && !resultado.aviso) await this.almacen.quitar(p.id)
     else if (resultado.tipo === 'enviado') await this.almacen.poner({ ...actual, rechazo: resultado.aviso })

@@ -166,15 +166,16 @@ export function formularioCertificado(c: Certificado): FormData {
  * Decide si un fallo de la función «archivos» es pasajero o definitivo, como `clasificar` con la base de datos.
  * Sin respuesta, es la red. 401 es la sesión, que se renueva sola; 408, 429 y los 5xx, el servidor.
  * El resto (sin permiso, no es un PDF, demasiado grande) no se arregla reintentando.
- * `que` dice qué no ha llegado, para empezar el motivo.
+ * `que` dice qué no ha llegado, para empezar el motivo. Sin `que`, el motivo es solo lo que dice la función.
  */
-export async function clasificarFuncion(error: unknown, que = 'El certificado no se ha podido archivar'): Promise<Resultado> {
+export async function clasificarFuncion(error: unknown, que?: string): Promise<Resultado> {
   const respuesta: unknown = (error as { context?: unknown } | null)?.context
   if (!(respuesta instanceof Response)) return { tipo: 'sin-conexion' }
   const { status } = respuesta
   if (status === 401 || status === 408 || status === 429 || status >= 500) return { tipo: 'sin-conexion' }
   const cuerpo = await respuesta.json().catch(() => null) as { error?: string } | null
-  return { tipo: 'rechazado', motivo: `${que}: ${cuerpo?.error ?? `la función respondió ${status}`}` }
+  const motivo = cuerpo?.error ?? `la función respondió ${status}`
+  return { tipo: 'rechazado', motivo: que ? `${que}: ${motivo}` : motivo }
 }
 
 /** Archiva el certificado. Si ya estaba (el mismo identificador y el mismo archivo), la función no hace nada. */
@@ -182,7 +183,7 @@ export async function subirCertificado(supabase: SupabaseClient, c: Certificado)
   try {
     // Un PDF tarda más que un parte. Con poca cobertura se le dan 2 minutos.
     const { error } = await supabase.functions.invoke('archivos', { body: formularioCertificado(c), timeout: 120_000 })
-    return error ? await clasificarFuncion(error) : { tipo: 'enviado' }
+    return error ? await clasificarFuncion(error, 'El certificado no se ha podido archivar') : { tipo: 'enviado' }
   } catch {
     return { tipo: 'sin-conexion' }
   }
@@ -207,11 +208,14 @@ export function formularioFoto(f: Foto, parte: string): FormData {
   return datos
 }
 
-/** Sube una foto de un parte que ya ha llegado. Si ya estaba, la función no hace nada. */
+/**
+ * Sube una foto de un parte que ya ha llegado. Si ya estaba, la función no hace nada.
+ * Si la función la rechaza, el motivo es solo lo que dice la función: `enviarParte` lo completa.
+ */
 export async function subirFoto(supabase: SupabaseClient, f: Foto, parte: string): Promise<Resultado> {
   try {
     const { error } = await supabase.functions.invoke('archivos', { body: formularioFoto(f, parte), timeout: 60_000 })
-    return error ? await clasificarFuncion(error, 'Motivo') : { tipo: 'enviado' }
+    return error ? await clasificarFuncion(error) : { tipo: 'enviado' }
   } catch {
     return { tipo: 'sin-conexion' }
   }
@@ -247,6 +251,10 @@ export type FilaParte = ReturnType<typeof filaParte>
  * (el mismo identificador), la base de datos no hace nada: `on conflict do nothing`. Con el certificado
  * y las fotos pasa lo mismo en la función «archivos».
  *
+ * Con `parteLlegado`, la cola ya sabe que el parte está: solo se envían las fotos que faltan. Reenviarlo
+ * no lo duplicaría, pero la base de datos volvería a comprobar el permiso. Si entretanto la revisión
+ * ha cambiado de responsable, rechazaría el parte por algo que no tiene que ver con las fotos.
+ *
  * Dice si ha llegado, si hay que reintentarlo más tarde o si la base de datos lo rechaza.
  * Cada cosa que llega se avisa con `llega`, para que la cola no la vuelva a enviar.
  *
@@ -255,24 +263,26 @@ export type FilaParte = ReturnType<typeof filaParte>
  */
 export async function enviarParte(
   supabase: SupabaseClient, fila: FilaParte, certificado?: Certificado, fotos: Foto[] = [],
-  llega: (l: Llegada) => Promise<void> = async () => {},
+  llega: (l: Llegada) => Promise<void> = async () => {}, parteLlegado = false,
 ): Promise<Resultado> {
-  if (certificado) {
-    const resultado = await subirCertificado(supabase, certificado)
-    if (resultado.tipo !== 'enviado') return resultado
-    await llega({ que: 'certificado' })
+  if (!parteLlegado) {
+    if (certificado) {
+      const resultado = await subirCertificado(supabase, certificado)
+      if (resultado.tipo !== 'enviado') return resultado
+      await llega({ que: 'certificado' })
+    }
+    try {
+      // Con una raya de cobertura, una petición puede quedarse colgada. A los 20 segundos se da por no llegada.
+      // Si en realidad llegó, reenviarla no duplica nada.
+      const { error } = await supabase.from('partes').upsert(fila, { onConflict: 'id', ignoreDuplicates: true })
+        .abortSignal(AbortSignal.timeout(20_000))
+      if (error) return clasificar(error)
+    } catch {
+      // Sin red, la librería a veces lanza en vez de devolver el error.
+      return { tipo: 'sin-conexion' }
+    }
+    await llega({ que: 'parte' })
   }
-  try {
-    // Con una raya de cobertura, una petición puede quedarse colgada. A los 20 segundos se da por no llegada.
-    // Si en realidad llegó, reenviarla no duplica nada.
-    const { error } = await supabase.from('partes').upsert(fila, { onConflict: 'id', ignoreDuplicates: true })
-      .abortSignal(AbortSignal.timeout(20_000))
-    if (error) return clasificar(error)
-  } catch {
-    // Sin red, la librería a veces lanza en vez de devolver el error.
-    return { tipo: 'sin-conexion' }
-  }
-  await llega({ que: 'parte' })
 
   const rechazos: string[] = []
   for (const foto of fotos) {
@@ -283,7 +293,7 @@ export async function enviarParte(
     else await llega({ que: 'foto', id: foto.id })
   }
   if (rechazos.length === 0) return { tipo: 'enviado' }
-  const cuantas = rechazos.length === 1 ? 'una foto no' : `${rechazos.length} fotos no`
+  const cuantas = rechazos.length === 1 ? 'una foto no se ha podido añadir' : `${rechazos.length} fotos no se han podido añadir`
   // Los motivos suelen ser el mismo (por ejemplo, el plazo): basta con decirlo una vez.
-  return { tipo: 'enviado', aviso: `El parte ha llegado, pero ${cuantas}. ${[...new Set(rechazos)].join(' ')}` }
+  return { tipo: 'enviado', aviso: `El parte ha llegado, pero ${cuantas}: ${[...new Set(rechazos)].join(' ')}` }
 }

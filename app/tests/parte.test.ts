@@ -138,12 +138,16 @@ describe('clasificarFuncion', () => {
     for (const status of [401, 408, 429, 500, 503]) expect((await clasificarFuncion(errorFuncion(status))).tipo).toBe('sin-conexion')
   })
   it('lo demás es un rechazo, con el motivo que da la función', async () => {
-    expect(await clasificarFuncion(errorFuncion(403, { error: 'No tienes permiso para archivar este documento.' }))).toEqual({
+    const que = 'El certificado no se ha podido archivar'
+    expect(await clasificarFuncion(errorFuncion(403, { error: 'No tienes permiso para archivar este documento.' }), que)).toEqual({
       tipo: 'rechazado', motivo: 'El certificado no se ha podido archivar: No tienes permiso para archivar este documento.',
     })
-    expect(await clasificarFuncion(errorFuncion(413))).toEqual({
+    expect(await clasificarFuncion(errorFuncion(413), que)).toEqual({
       tipo: 'rechazado', motivo: 'El certificado no se ha podido archivar: la función respondió 413',
     })
+  })
+  it('sin decir qué no ha llegado, el motivo es solo lo que dice la función', async () => {
+    expect(await clasificarFuncion(errorFuncion(403, { error: 'Ese parte no es tuyo.' }))).toEqual({ tipo: 'rechazado', motivo: 'Ese parte no es tuyo.' })
   })
 })
 
@@ -237,9 +241,28 @@ describe('enviarParte', () => {
     const r = await enviarParte(supabase, filaParte('p2', listo, undefined, hoy), undefined, [foto('f1'), foto('f2')])
     expect(r).toEqual({
       tipo: 'enviado',
-      aviso: 'El parte ha llegado, pero una foto no. Motivo: Ese parte se recibió hace más de 7 días y ya no admite fotos.',
+      aviso: 'El parte ha llegado, pero una foto no se ha podido añadir: Ese parte se recibió hace más de 7 días y ya no admite fotos.',
     })
     expect(llegadas).toEqual(['parte p2', 'foto f1 de p2', 'foto f2 de p2'])
+  })
+  it('si se rechazan varias por lo mismo, el motivo se dice una vez', async () => {
+    // Cada foto tiene su propia respuesta: una respuesta solo se puede leer una vez.
+    const plazo = () => errorFuncion(403, { error: 'Ese parte se recibió hace más de 7 días y ya no admite fotos.' })
+    const { supabase } = supabaseDeMentira(undefined, { f1: plazo(), f2: plazo() })
+    const r = await enviarParte(supabase, filaParte('p2', listo, undefined, hoy), undefined, [foto('f1'), foto('f2')])
+    expect(r).toEqual({
+      tipo: 'enviado',
+      aviso: 'El parte ha llegado, pero 2 fotos no se han podido añadir: Ese parte se recibió hace más de 7 días y ya no admite fotos.',
+    })
+  })
+  it('si el parte ya había llegado, solo envía las fotos que faltan', async () => {
+    const { supabase, llegadas } = supabaseDeMentira()
+    const avisos: Llegada[] = []
+    const r = await enviarParte(supabase, fila, certificado, [foto('f2')], async l => { avisos.push(l) }, true)
+    expect(r).toEqual({ tipo: 'enviado' })
+    // Ni el certificado ni el parte: así la base de datos no vuelve a comprobar el permiso del parte.
+    expect(llegadas).toEqual(['foto f2 de p1'])
+    expect(avisos).toEqual([{ que: 'foto', id: 'f2' }])
   })
   it('si el parte no llega, las fotos no se envían', async () => {
     const { supabase, llegadas } = supabaseDeMentira(errorFuncion(503))

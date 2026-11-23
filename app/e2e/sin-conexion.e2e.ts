@@ -223,7 +223,7 @@ test('si una foto no se acepta, el parte llega igual y el aviso se queda en Inic
   await expect(page.getByRole('list', { name: 'Fotos del parte' }).getByRole('listitem')).toHaveCount(1)
   await page.getByRole('button', { name: 'Enviar parte' }).click()
   await expect(page.getByText(/^Parte enviado\. La revisión/)).toBeVisible()
-  await expect(page.getByRole('alert')).toContainText('El parte ha llegado, pero una foto no. Motivo: Ese parte se recibió hace más de 7 días')
+  await expect(page.getByRole('alert')).toContainText('El parte ha llegado, pero una foto no se ha podido añadir: Ese parte se recibió hace más de 7 días')
   expect(supabase.partes.size).toBe(1)
 
   await page.getByRole('button', { name: '← Inicio' }).click()

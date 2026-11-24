@@ -232,6 +232,19 @@ await como('admin', async () => {
   await parteSimple(calefaccion, 'preventivo', hoy, revCaldera, indicada)
   ok(await proxima(revCaldera) === indicada, 'sin periodicidad usa la fecha indicada')
 })
+// Un móvil con el reloj mal no puede dejar una revisión parada en el futuro (#94).
+await como('guarda', async () => {
+  // Si se rechaza, la revisión no se mueve: el parte no llega a existir.
+  let motivo = ''
+  await db.exec('savepoint prueba')
+  try { await parteSimple(extintores, 'comprobacion', await dia('1 year'), revGuarda) } catch (e) { motivo = e.message }
+  await db.exec('rollback to savepoint prueba')
+  ok(/posterior a hoy\. Revisa la fecha del móvil/.test(motivo), 'un parte con fecha futura se rechaza, con un motivo que se entiende')
+  const pasadoManana = await dia('2 days'), manana = await dia('1 day')
+  ok(await falla(() => parteSimple(extintores, 'comprobacion', pasadoManana)), 'pasado mañana tampoco vale')
+  // Mañana sí: la base de datos va en hora universal, y en España ya es mañana desde las 23:00 o las 22:00.
+  ok(!await falla(() => parteSimple(extintores, 'comprobacion', manana)), 'un parte con fecha de mañana se admite, por la diferencia de hora')
+})
 await como('guarda', async () => {
   const ident = '88888888-8888-4888-8888-888888888888'
   const envio = `insert into public.partes (id, edificio_id, instalacion_id, fecha, tipo, descripcion)

@@ -14,6 +14,7 @@ Esquema de Supabase (PostgreSQL) del Libro del Edificio.
 | `migrations/20261116000100_documento_repetido.sql` | Un identificador que ya existe solo se da por bueno si es el mismo archivo |
 | `migrations/20261116000200_permisos_cerrados_por_defecto.sql` | Hace que las tablas y funciones nuevas nazcan cerradas para la clave pública |
 | `migrations/20261118000000_fotos_de_parte.sql` | Una foto de un parte solo apunta a su propio archivo, en `fotos/`. Las fotos se añaden hasta 7 días después de recibir el parte, y `recibido_en` lo pone la base de datos. Añade `puedo_adjuntar_foto` y `foto_fuera_de_plazo`, para la función de archivos |
+| `migrations/20261124000000_parte_sin_fecha_futura.sql` | Rechaza un parte con fecha posterior a mañana, para que un móvil con el reloj mal no deje parada una revisión |
 | `seed.sql` | Carga un albergue ficticio. Nunca se usa en producción |
 | `tests/comprobar.mjs` | Comprueba el esquema y los permisos de cada perfil |
 | `config.toml` | Configuración de la CLI de Supabase |

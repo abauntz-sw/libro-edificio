@@ -1,13 +1,16 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, expect, test } from 'vitest'
 import { huella } from '../src/archivos.ts'
 import { comprobarListado, type Documento } from '../src/comprobar.ts'
-import { comprobarArchivos, conCopiaTemporal, copiarDocumentos, guardarYSubir, limpiarCopiasAbandonadas, rutaDelOriginal, ultimoCommit } from '../src/repositorio.ts'
+import {
+  comprobarArchivos, conCopiaTemporal, copiarDocumentos, type Envio, guardarYSubir, limpiarCopiasAbandonadas, LIMITE_ENVIO_BYTES,
+  repartirEnEnvios, rutaDelOriginal, subirPorEnvios, ultimoCommit,
+} from '../src/repositorio.ts'
 
 const git = (carpeta: string, ...argumentos: string[]) =>
   execFileSync('git', argumentos, { cwd: carpeta, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
@@ -110,6 +113,58 @@ test('repetir la carga no copia ni hace otro commit', async () => {
 
   expect(segunda).toMatchObject({ copiados: 0, conCommit: false, commit: primera.commit })
   expect(commitsEnServidor()).toBe(1)
+})
+
+test('reparte en envíos que no pasan del límite, sin cambiar el orden', () => {
+  const tamano = (n: number) => n
+  expect(repartirEnEnvios([], tamano, 10)).toEqual([])
+  expect(repartirEnEnvios([3, 3, 4], tamano, 10)).toEqual([[3, 3, 4]])           // justo el límite cabe
+  expect(repartirEnEnvios([6, 3, 2, 9, 1], tamano, 10)).toEqual([[6, 3], [2], [9, 1]])
+  expect(repartirEnEnvios([12, 1], tamano, 10)).toEqual([[12], [1]])             // uno que ya pasa va solo
+  // El límite deja margen de sobra a los 2 GB que admite GitHub en un push.
+  expect(LIMITE_ENVIO_BYTES).toBeLessThan(2 * 1024 ** 3)
+})
+
+/** Sube por envíos como `importar`, y apunta lo que pasa con cada uno. */
+async function subirEnvios(envios: Documento[][], alSubir: (envio: Envio) => Promise<void> = async () => {}) {
+  const subidos: Envio[] = []
+  await conCopiaTemporal(direccion, envios.flat().map(doc => doc.ruta), copia =>
+    subirPorEnvios(copia, origen, envios, async envio => { subidos.push(envio); await alSubir(envio) }))
+  return subidos
+}
+
+test('cada envío es un commit y un push, con sus propios archivos', async () => {
+  const documentos = await preparar({ 'a/uno.pdf': 'uno', 'a/dos.pdf': 'dos', 'b/tres.pdf': 'tres' })
+  const envios = repartirEnEnvios(documentos, () => 1, 2)
+
+  const subidos = await subirEnvios(envios)
+
+  expect(subidos.map(e => [e.numero, e.de, e.copiados, e.conCommit])).toEqual([[1, 2, 2, true], [2, 2, 1, true]])
+  expect(commitsEnServidor()).toBe(2)
+  expect(subidos[0].commit).toBe(git(servidor, 'rev-parse', 'main~1'))
+  expect(subidos[1].commit).toBe(git(servidor, 'rev-parse', 'main'))
+  expect(git(servidor, 'log', '-1', '--format=%s', 'main~1')).toBe('Carga de 2 documentos (envío 1 de 2)')
+  // El primer commit tiene los dos primeros archivos, y no el tercero.
+  expect(git(servidor, 'ls-tree', '-r', '--name-only', 'main~1').split('\n').sort()).toEqual([documentos[0].ruta, documentos[1].ruta].sort())
+})
+
+test('si un envío falla, los anteriores se quedan subidos, y al repetir no se duplica nada', async () => {
+  const documentos = await preparar({ 'a/uno.pdf': 'uno', 'a/dos.pdf': 'dos', 'b/tres.pdf': 'tres' })
+  const envios = repartirEnEnvios(documentos, () => 1, 2)
+  const apartado = `${servidor}-apartado`
+
+  // Tras el primer envío, «GitHub» desaparece: el segundo push falla, como si se cortara la red.
+  await expect(subirEnvios(envios, async envio => { if (envio.numero === 1) await rename(servidor, apartado) }))
+    .rejects.toThrow()
+  await rename(apartado, servidor)
+  expect(commitsEnServidor()).toBe(1)
+  expect(contenidoEnServidor(documentos[1].ruta)).toBe(contenidoDe(join(origen, documentos[1].rutaOriginal)))
+
+  const otraVez = await subirEnvios(envios)
+
+  expect(otraVez.map(e => [e.copiados, e.conCommit])).toEqual([[0, false], [1, true]])
+  expect(commitsEnServidor()).toBe(2)
+  expect(contenidoEnServidor(documentos[2].ruta)).toBe(contenidoDe(join(origen, documentos[2].rutaOriginal)))
 })
 
 test('no trae al equipo los documentos que ya había en el repositorio', async () => {

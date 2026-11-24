@@ -1,4 +1,4 @@
-// Sube los documentos al repositorio del edificio en un único commit.
+// Sube los documentos al repositorio del edificio, en envíos de como mucho 500 MB, con un commit cada uno.
 // Trabaja en una copia parcial y temporal del repositorio, que se borra al terminar:
 // en el equipo no queda ningún documento. Los originales solo se leen.
 
@@ -151,3 +151,66 @@ export async function guardarYSubir(repo: string, mensaje: string): Promise<bool
  * La copia parcial no trae la historia, así que no se sabe qué commit guardó cada archivo. El último los contiene todos.
  */
 export const ultimoCommit = (repo: string) => git(repo, 'rev-parse', 'HEAD')
+
+const MB = 1024 * 1024
+/**
+ * GitHub no acepta un push de más de 2 GB, y la documentación de un edificio puede pasar de eso.
+ * Por eso la carga se sube en envíos de como mucho 500 MB, con un commit y un push cada uno.
+ * Así cabe con margen y, si la red se corta a mitad, lo ya subido se queda.
+ */
+export const LIMITE_ENVIO_BYTES = 500 * MB
+
+/**
+ * Reparte los documentos en envíos que no pasan de `limite` bytes, sin cambiar su orden.
+ * Un archivo que solo ya pasa del límite va solo en su envío. Con el límite de 500 MB no pasa,
+ * porque los de más de 100 MB ya se rechazan antes.
+ */
+export function repartirEnEnvios<T>(documentos: T[], bytes: (doc: T) => number, limite = LIMITE_ENVIO_BYTES): T[][] {
+  const envios: T[][] = []
+  let actual: T[] = []
+  let suma = 0
+  for (const doc of documentos) {
+    const tamano = bytes(doc)
+    if (actual.length > 0 && suma + tamano > limite) {
+      envios.push(actual)
+      actual = []
+      suma = 0
+    }
+    actual.push(doc)
+    suma += tamano
+  }
+  if (actual.length > 0) envios.push(actual)
+  return envios
+}
+
+/** Lo que ha pasado con un envío, ya subido. */
+export interface Envio {
+  /** El número de este envío, desde 1. */
+  numero: number
+  /** Cuántos envíos hay en total. */
+  de: number
+  documentos: Documento[]
+  /** Cuántos archivos se han copiado. Los que ya estaban, de un intento anterior, no cuentan. */
+  copiados: number
+  conCommit: boolean
+  /** El último commit del repositorio, que contiene los archivos de este envío. */
+  commit: string
+}
+
+/**
+ * Sube los envíos de uno en uno: copia sus archivos, hace su commit y lo sube.
+ * Después de cada uno avisa con `alSubir`, antes de empezar el siguiente.
+ * Si un envío falla, se para y deja pasar el error: los anteriores ya están en el repositorio.
+ */
+export async function subirPorEnvios(
+  copia: string, origen: string, envios: Documento[][], alSubir: (envio: Envio) => Promise<void>,
+): Promise<void> {
+  for (const [i, documentos] of envios.entries()) {
+    const copiados = await copiarDocumentos(copia, origen, documentos)
+    const mensaje = envios.length === 1
+      ? `Carga de ${documentos.length} documentos`
+      : `Carga de ${documentos.length} documentos (envío ${i + 1} de ${envios.length})`
+    const conCommit = await guardarYSubir(copia, mensaje)
+    await alSubir({ numero: i + 1, de: envios.length, documentos, copiados, conCommit, commit: await ultimoCommit(copia) })
+  }
+}

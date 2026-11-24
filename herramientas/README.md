@@ -217,11 +217,13 @@ Copia `.env.ejemplo` como `.env` y rellénalo: la dirección del proyecto de Sup
 
 1. **Comprueba toda la hoja.** Tipo, título, fechas, instalaciones, y que cada archivo sigue en su sitio y no ha cambiado. Muestra todos los errores juntos, con su número de fila. Con un solo error no escribe nada.
 2. **Abre una copia temporal del repositorio.** Es parcial: de los documentos que ya hay en el repositorio no baja ninguno.
-3. **Copia los archivos** a esa copia, en `documentos/AAAA/<id>.ext`. El año es el de la fecha del documento. Los originales solo se leen.
-4. **Hace un único commit y lo sube.** Cada ficha guarda ese commit en `commit_sha`. La copia temporal no trae la historia y no sabe qué commit guardó cada archivo, así que se apunta el último, que los contiene todos.
-5. **Borra la copia temporal**, también si algo ha fallado.
-6. **Crea las fichas** en Supabase con `registrar_documento` y muestra un resumen: cargados, saltados y con error.
+3. **Reparte lo marcado en envíos** de como mucho 500 MB, en el orden del listado. GitHub no acepta más de 2 GB de una vez, y la documentación de un edificio puede pasar de eso. Si cabe todo en uno, es un solo envío, como antes.
+4. **Sube cada envío por separado.** Copia sus archivos a la copia temporal, en `documentos/AAAA/<id>.ext` (el año es el de la fecha del documento), hace un commit y lo sube. Los originales solo se leen.
+5. **Crea las fichas de ese envío** en Supabase con `registrar_documento`, antes de pasar al siguiente. Cada ficha guarda en `commit_sha` el commit de su envío.
+6. **Borra la copia temporal**, también si algo ha fallado, y muestra un resumen: cargados, saltados, con error y, si la subida se ha cortado, sin subir.
 7. **Aparta lo cargado a `[en-el-libro]`**, salvo con `--no-mover`. Ver el apartado siguiente.
+
+**Si la subida se corta a mitad** (se va la red, GitHub no responde), lo de los envíos anteriores ya está en el repositorio y con su ficha. Repite la misma orden: lo ya subido no se vuelve a subir ni se duplica, y sigue con lo que falta.
 
 ### Lo cargado se aparta a `[en-el-libro]`
 
@@ -243,6 +245,8 @@ Está pendiente de confirmar con la FNDME (pregunta 14 de `PLAN-BELAGUA.md`). Si
 ### No deja copias en el equipo
 
 `importar` no guarda ningún documento en el equipo desde el que se hace la carga. La copia temporal vive en la carpeta de temporales del sistema solo mientras dura la subida.
+
+Mientras dura, ocupa más o menos el doble de lo que se carga: cada archivo está en la copia y, comprimido, dentro de Git. Para cargar 3 GB, deja unos 6 GB libres en el disco de la carpeta de temporales.
 
 Si el programa se cierra a la fuerza a mitad de la subida (se cierra la ventana o se apaga el equipo), la carpeta no se llega a borrar. Se llama `libro-carga-…` y está en la carpeta de temporales (`$env:TEMP` en PowerShell). Bórrala a mano.
 

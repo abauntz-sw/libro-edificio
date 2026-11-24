@@ -65,16 +65,18 @@ npx -y supabase@3.1.0 db push --remote
 
 `--dry-run` solo enseña qué migraciones aplicaría, sin tocar nada. Míralo antes de aplicar.
 
+**En Windows:** si PowerShell dice «la ejecución de scripts está deshabilitada en este sistema», escribe `npx.cmd` en lugar de `npx`.
+
 **Ojo con `--remote`.** Desde la versión 3, las órdenes `db` trabajan por defecto con la base de datos del ordenador. Sin `--remote`, `db push` no toca el proyecto de Supabase. Con `--remote` va al proyecto enlazado con `link`. Las órdenes `functions` y `secrets` van siempre al proyecto.
 
-**Cuándo hace falta `--include-all`.** `db push` se niega a aplicar una migración con fecha anterior a la última que ya tiene el proyecto. Pasa cuando dos ramas crean migraciones a la vez y entran en `main` en otro orden. Por ejemplo: `20261116000000_exportar_indice.sql` entró en `main` después de `20261116000100` y `20261116000200`, y `libro-dev` ya tenía esas dos. Con `--include-all` la aplica igualmente:
+**Cuándo hace falta `--include-all`.** `db push` se niega a aplicar una migración con fecha anterior a la última que ya tiene el proyecto. Pasa cuando dos ramas crean migraciones a la vez y entran en `main` en otro orden. Por ejemplo: `20261116000000_exportar_indice.sql` entró en `main` después de `20261116000100` y `20261116000200`, y `libro-dev` ya tenía esas dos. La regla de la fecha de las migraciones, en [Reglas](#reglas), lo evita. Si aun así pasa, con `--include-all` la aplica igualmente:
 
 ```bash
 npx -y supabase@3.1.0 db push --remote --include-all --dry-run
 npx -y supabase@3.1.0 db push --remote --include-all
 ```
 
-Esa migración se aplica después de otras más nuevas. Antes de usarlo, comprueba que no dependa de que esas otras no estén.
+Esa migración se aplica después de otras más nuevas. Antes de usarlo, comprueba que no choca con lo que cambian las migraciones más nuevas.
 
 Para ver qué tiene apuntado el proyecto: `npx -y supabase@3.1.0 migration list --remote`.
 
@@ -83,6 +85,13 @@ Para ver qué tiene apuntado el proyecto: `npx -y supabase@3.1.0 migration list 
 - **Clave de servicio:** salta todos los permisos. Va solo en los secretos de las funciones de Supabase, nunca en el navegador, el móvil ni el ordenador de la oficina.
 - **Clave pública:** puede estar en la aplicación. Sin un usuario activo no da acceso a nada.
 - **Cambios de tablas:** cada cambio es una migración nueva. No edites una que ya esté aplicada.
+- **Fecha de las migraciones:** antes de fusionar un PR con una migración, mira si en `main` ya hay otra con fecha posterior. Si la hay, cambia la fecha del nombre del archivo por una más nueva. Así se aplican en el orden en que entran en `main`, y no hace falta `--include-all`. Si la migración ya se probó en un proyecto de desarrollo con la fecha vieja, apunta allí el cambio de nombre, sin volver a aplicarla:
+
+  ```bash
+  npx -y supabase@3.1.0 migration repair --remote --status reverted <fecha-vieja>
+  npx -y supabase@3.1.0 migration repair --remote --status applied <fecha-nueva>
+  ```
+
 - **Permisos:** todo cambio de permisos lleva su comprobación en `tests/comprobar.mjs`.
 - **Documentos:** se crean con `registrar_documento`, no con un `insert` directo. Su ruta es siempre `documentos/AAAA/<id>.<extensión>`: una ficha no puede apuntar a otro archivo del repositorio.
 - **Tablas y funciones nuevas:** nacen cerradas para la clave pública, y las funciones no las puede ejecutar nadie más que su dueño. Cada migración que cree una debe dar solo los permisos necesarios, por ejemplo `grant execute ... to authenticated`. Las tablas nuevas de `public` siguen abiertas por defecto para `authenticated`: la seguridad por filas manda. `comprobar.mjs` avisa si algo queda abierto a la clave pública.

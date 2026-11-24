@@ -6,6 +6,8 @@
 //
 // De paso se pierden los datos que lleva dentro la foto original (EXIF), como el lugar donde se hizo.
 
+import { leerCabeceraJpeg, medidasGiradas } from './cabecera-jpeg.ts'
+
 /** El lado largo de la foto comprimida, en píxeles. */
 export const LADO_MAXIMO = 1600
 
@@ -30,6 +32,39 @@ export function medidas(ancho: number, alto: number, maximo = LADO_MAXIMO): { an
   return { ancho: Math.max(1, Math.round(ancho * escala)), alto: Math.max(1, Math.round(alto * escala)) }
 }
 
+/** Lo que se lee del principio de la foto para buscar su cabecera. Las medidas y el EXIF van antes. */
+const BYTES_CABECERA = 256 * 1024
+
+/**
+ * Abre un JPEG ya reducido, sin cargar la foto entera en memoria.
+ * Una de 48 megapíxeles abierta entera ocupa unos 200 MB: en un móvil barato puede no caber.
+ *
+ * El navegador gira la foto según el EXIF y después la reduce, así que se le piden las medidas ya giradas.
+ * Si un navegador lo hiciera al revés, la foto saldría deformada: por eso se comprueba que conserva
+ * la proporción. Si no la conserva, o la foto no es un JPEG, o no hace falta reducirla, devuelve null
+ * y la foto se abre entera, como antes.
+ */
+export async function abrirReducida(archivo: Blob): Promise<ImageBitmap | null> {
+  const cabecera = leerCabeceraJpeg(new Uint8Array(await archivo.slice(0, BYTES_CABECERA).arrayBuffer()))
+  if (!cabecera) return null
+  const girada = medidasGiradas(cabecera)
+  const reducida = medidas(girada.ancho, girada.alto)
+  if (reducida.ancho >= girada.ancho) return null
+  const mapa = await createImageBitmap(archivo, {
+    resizeWidth: reducida.ancho, resizeHeight: reducida.alto, resizeQuality: 'high',
+  }).catch(() => null)
+  if (!mapa) return null
+  // Un navegador que no sabe reducir la devuelve entera: también vale, porque se reduce al dibujarla.
+  if (mismaProporcion(mapa, girada)) return mapa
+  mapa.close()
+  return null
+}
+
+/** Si dos medidas tienen la misma forma, con un margen de un píxel por el redondeo. */
+function mismaProporcion(a: { width: number; height: number }, b: { ancho: number; alto: number }): boolean {
+  return Math.abs(a.width * b.alto - a.height * b.ancho) <= Math.max(b.ancho, b.alto)
+}
+
 /**
  * Dibuja la foto en un lienzo del tamaño ya reducido.
  * `createImageBitmap` gira la foto como la hizo el móvil (lo dice el EXIF). Si el navegador no puede, se usa una imagen.
@@ -48,7 +83,7 @@ async function dibujar(archivo: Blob): Promise<HTMLCanvasElement> {
     contexto.drawImage(fuente, 0, 0, m.ancho, m.alto)
   }
   try {
-    const mapa = await createImageBitmap(archivo)
+    const mapa = await abrirReducida(archivo) ?? await createImageBitmap(archivo)
     pintar(mapa, mapa.width, mapa.height)
     mapa.close()
     return lienzo

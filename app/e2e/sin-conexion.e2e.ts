@@ -234,6 +234,75 @@ test('si una foto no se acepta, el parte llega igual y el aviso se queda en Inic
   expect(supabase.llegadas.filter(l => l.startsWith('foto'))).toHaveLength(1)
 })
 
+/**
+ * Una foto de 4000 × 3000 hecha con el móvil de pie: se guarda tumbada y el EXIF dice que hay que girarla
+ * 90° a la derecha (orientación 6). La mitad izquierda es roja y la derecha azul: ya girada, arriba es roja.
+ */
+async function fotoDePie(pagina: Page): Promise<Buffer> {
+  const base64 = await pagina.evaluate(async () => {
+    const lienzo = document.createElement('canvas')
+    lienzo.width = 4000
+    lienzo.height = 3000
+    const contexto = lienzo.getContext('2d')!
+    contexto.fillStyle = '#f00'
+    contexto.fillRect(0, 0, 2000, 3000)
+    contexto.fillStyle = '#00f'
+    contexto.fillRect(2000, 0, 2000, 3000)
+    const jpeg = new Uint8Array(await (await new Promise<Blob>(r => lienzo.toBlob(b => r(b!), 'image/jpeg', 0.9))).arrayBuffer())
+    // El bloque EXIF, con una sola etiqueta: Orientation (0x0112) = 6.
+    const tiff = [0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0]
+    const cuerpo = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff]
+    const conExif = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0, cuerpo.length + 2, ...cuerpo, ...jpeg.slice(2)])
+    let texto = ''
+    for (const byte of conExif) texto += String.fromCharCode(byte)
+    return btoa(texto)
+  })
+  return Buffer.from(base64, 'base64')
+}
+
+test('una foto hecha de pie se abre ya reducida y llega derecha', async ({ page }) => {
+  // Se apunta qué pide la app al navegador: tiene que pedir la foto ya reducida, no entera.
+  await page.addInitScript(() => {
+    const original = window.createImageBitmap.bind(window)
+    const pedidas: unknown[] = []
+    Object.assign(window, { pedidas })
+    window.createImageBitmap = ((fuente: ImageBitmapSource, ...resto: unknown[]) => {
+      pedidas.push(resto.at(-1) ?? null)
+      return (original as (...a: unknown[]) => Promise<ImageBitmap>)(fuente, ...resto)
+    }) as typeof window.createImageBitmap
+  })
+  await abrir(page)
+  await page.getByRole('button', { name: 'Registrar parte' }).click()
+  await page.getByRole('heading', { name: '¿Dónde?' }).waitFor()
+  const dePie = await fotoDePie(page)
+
+  await rellenarParte(page, 'Foto del extintor, hecha de pie.')
+  await page.locator('input[accept="image/*"]').setInputFiles({ name: 'IMG_0004.jpg', mimeType: 'image/jpeg', buffer: dePie })
+  await expect(page.getByRole('list', { name: 'Fotos del parte' }).getByRole('listitem')).toHaveCount(1)
+  // Las medidas ya giradas: 1200 de ancho y 1600 de alto.
+  const pedidas = await page.evaluate(() => (window as unknown as { pedidas: unknown[] }).pedidas)
+  expect(pedidas).toContainEqual({ resizeWidth: 1200, resizeHeight: 1600, resizeQuality: 'high' })
+
+  await page.getByRole('button', { name: 'Enviar parte' }).click()
+  await expect(page.getByText(/^Parte enviado, con una foto\./)).toBeVisible()
+  const [{ bytes }] = supabase.fotos.values()
+  expect(medidasJpeg(bytes)).toEqual({ ancho: 1200, alto: 1600 })
+  // Derecha: arriba roja y abajo azul. Si no se hubiera girado, saldría roja a la izquierda.
+  const colores = await page.evaluate(async base64 => {
+    const datos = Uint8Array.from(atob(base64), letra => letra.charCodeAt(0))
+    const mapa = await createImageBitmap(new Blob([datos], { type: 'image/jpeg' }))
+    const lienzo = new OffscreenCanvas(mapa.width, mapa.height)
+    const contexto = lienzo.getContext('2d')!
+    contexto.drawImage(mapa, 0, 0)
+    const color = (x: number, y: number) => {
+      const [r, , b] = contexto.getImageData(x, y, 1, 1).data
+      return r > 128 && b < 128 ? 'rojo' : b > 128 && r < 128 ? 'azul' : 'otro'
+    }
+    return { arriba: color(600, 400), abajo: color(600, 1200) }
+  }, bytes.toString('base64'))
+  expect(colores).toEqual({ arriba: 'rojo', abajo: 'azul' })
+})
+
 test('la guarda no ve el botón del certificado', async ({ page }) => {
   await abrir(page)
   await page.getByRole('button', { name: 'Registrar parte' }).click()

@@ -6,6 +6,7 @@
 // También contesta por la función «archivos», para los certificados y las fotos de los partes.
 
 import type { BrowserContext, Page, Route } from '@playwright/test'
+import { leerCabeceraJpeg } from '../src/cabecera-jpeg.ts'
 
 export const SUPABASE = 'http://supabase.prueba'
 const GUARDA = '33333333-3333-4333-8333-333333333333'
@@ -177,20 +178,10 @@ function leerFormulario(cuerpo: Buffer, tipo: string): { campos: Record<string, 
   return { campos, archivo: bytes }
 }
 
-/** El ancho y el alto de un JPEG, leídos de su cabecera (el marcador SOF). */
+/** El ancho y el alto de un JPEG, leídos de su cabecera con el mismo lector que usa la app. */
 export function medidasJpeg(bytes: Buffer): { ancho: number; alto: number } | null {
-  let i = 2
-  while (i + 9 < bytes.length) {
-    if (bytes[i] !== 0xff) return null
-    const marcador = bytes[i + 1]
-    const largo = bytes.readUInt16BE(i + 2)
-    // SOF0 a SOF15, menos DHT (C4), JPG (C8) y DAC (CC), que no son cabeceras de imagen.
-    if (marcador >= 0xc0 && marcador <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marcador)) {
-      return { alto: bytes.readUInt16BE(i + 5), ancho: bytes.readUInt16BE(i + 7) }
-    }
-    i += 2 + largo
-  }
-  return null
+  const cabecera = leerCabeceraJpeg(bytes)
+  return cabecera && { ancho: cabecera.ancho, alto: cabecera.alto }
 }
 
 /** Abre la web y espera a Inicio. */

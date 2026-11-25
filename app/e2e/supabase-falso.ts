@@ -3,7 +3,8 @@
 // Contesta, desde el propio test, las peticiones que la web hace a Supabase, con datos ficticios.
 // Como la base de datos de verdad, ignora un parte cuyo identificador ya tiene (`on conflict do nothing`).
 // Así se comprueba lo que importa en la 1.7: cuántas veces llega cada parte.
-// También contesta por la función «archivos», para los certificados y las fotos de los partes.
+// También contesta por la función «archivos», para los certificados y las fotos de los partes,
+// y para bajar los documentos del Archivo.
 
 import type { BrowserContext, Page, Route } from '@playwright/test'
 import { leerCabeceraJpeg } from '../src/cabecera-jpeg.ts'
@@ -31,18 +32,40 @@ export type ModoFotos =
 export type PerfilFalso = 'guarda' | 'admin'
 
 const USUARIOS: Record<PerfilFalso, unknown> = {
-  guarda: { nombre: 'Guarda de Ejemplo', perfil: 'guarda', edificio_id: 'e1', contacto_id: 'c-guarda' },
-  admin: { nombre: 'Administración de Ejemplo', perfil: 'admin', edificio_id: 'e1', contacto_id: null },
+  guarda: { id: 'u-guarda', nombre: 'Guarda de Ejemplo', perfil: 'guarda', edificio_id: 'e1', contacto_id: 'c-guarda' },
+  admin: { id: 'u-admin', nombre: 'Administración de Ejemplo', perfil: 'admin', edificio_id: 'e1', contacto_id: null },
 }
 
 const TABLAS: Record<string, unknown[]> = {
   edificios: [{ nombre: 'Albergue de Ejemplo (ficticio)' }],
-  instalaciones: [{ id: 'i-incendios', nombre: 'Protección contra incendios' }],
+  instalaciones: [{ id: 'i-incendios', nombre: 'Protección contra incendios' }, { id: 'i-calor', nombre: 'Calefacción y agua caliente' }],
+  tipos_documento: [{ id: 'certificado', nombre: 'Certificado' }, { id: 'contrato-mantenimiento', nombre: 'Contrato de mantenimiento' }, { id: 'licencia', nombre: 'Licencia' }],
   revisiones: [{
     id: 'r-extintores', instalacion_id: 'i-incendios', descripcion: 'Revisión de extintores y equipos por el titular',
     periodicidad_meses: 3, responsable_id: 'c-guarda', proxima: '2026-12-15',
   }],
 }
+
+/** Un documento del Archivo, como lo devuelve la base de datos con sus instalaciones. */
+export interface DocumentoFalso {
+  id: string; tipo_id: string; titulo: string; fecha: string; emisor: string; caduca: string | null
+  nombre_original: string; eliminado_en: string | null; eliminado_por: string | null
+  documento_instalaciones: { instalacion_id: string }[]
+}
+
+/** Una fecha a tantos días de hoy, como 2026-11-23. */
+const aDias = (dias: number) => new Date(Date.now() + dias * 86_400_000).toISOString().slice(0, 10)
+
+/** Unos documentos ficticios: uno caducado, uno que caduca pronto, uno vigente y uno de todo el edificio. */
+const documentosDeEjemplo = (): DocumentoFalso[] => [
+  ['d-calor', 'contrato-mantenimiento', 'Contrato de calefacción', aDias(-400), 'Calor Ficticio SL', aDias(-30), 'contrato_calefaccion.pdf', ['i-calor']],
+  ['d-extintores', 'certificado', 'Revisión anual de extintores', aDias(-300), 'Extintores Ficticios SL', aDias(40), 'extintores ultima.pdf', ['i-incendios']],
+  ['d-caldera', 'certificado', 'Revisión de la caldera', aDias(-20), 'Calor Ficticio SL', aDias(345), 'scan0015.pdf', ['i-calor']],
+  ['d-licencia', 'licencia', 'Licencia de actividad', '2021-06-02', 'Ayuntamiento de Villaficticia', null, 'scan0013.pdf', []],
+].map(([id, tipo_id, titulo, fecha, emisor, caduca, nombre_original, instalaciones]) => ({
+  id, tipo_id, titulo, fecha, emisor, caduca, nombre_original, eliminado_en: null, eliminado_por: null,
+  documento_instalaciones: (instalaciones as string[]).map(instalacion_id => ({ instalacion_id })),
+}) as DocumentoFalso)
 
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }
 
@@ -68,6 +91,10 @@ export class SupabaseFalso {
   certificados = new Map<string, Record<string, string | string[]>>()
   /** Las fotos guardadas, por identificador: su parte y sus bytes tal como llegan. */
   fotos = new Map<string, { parte: string; bytes: Buffer }>()
+  /** Los documentos del Archivo y de la Papelera. Se cambian al mandarlos a la papelera o recuperarlos. */
+  documentos = documentosDeEjemplo()
+  /** Los documentos que se han bajado, por identificador, en orden. */
+  bajados: string[] = []
   modo: Modo = 'aceptar'
   modoFotos: ModoFotos = 'aceptar'
   /** Peticiones que no sabe contestar. Si hay alguna, el test lo dice. */
@@ -113,6 +140,19 @@ export class SupabaseFalso {
       return ruta.fulfill({ status: 200, headers: CORS, json: unoSolo ? filas[0] : filas })
     }
 
+    if (tabla === 'documentos') return this.contestarDocumentos(ruta, url)
+
+    if (url.pathname === '/functions/v1/archivos' && peticion.method() === 'GET') {
+      // Como la función de verdad: entrega el PDF de un documento que se ve, y si no, 404.
+      const id = url.searchParams.get('id') ?? ''
+      this.bajados.push(id)
+      const documento = this.documentos.find(d => d.id === id && d.eliminado_en === null)
+      if (!documento) return ruta.fulfill({ status: 404, headers: CORS, json: { error: 'No se encuentra ese documento.' } })
+      return ruta.fulfill({
+        status: 200, headers: { ...CORS, 'content-type': 'application/pdf' }, body: Buffer.from(`%PDF-1.7 ${documento.titulo}`),
+      })
+    }
+
     if (url.pathname === '/functions/v1/archivos' && peticion.method() === 'POST') {
       // Como la función de verdad: repetir la subida del mismo documento o de la misma foto no la duplica.
       const { campos, archivo } = leerFormulario(peticion.postDataBuffer() ?? Buffer.alloc(0), peticion.headers()['content-type'] ?? '')
@@ -148,6 +188,40 @@ export class SupabaseFalso {
     this.desconocidas.push(`${peticion.method()} ${url.pathname}`)
     return ruta.fulfill({ status: 404, headers: CORS, json: { message: 'No existe en el Supabase de mentira' } })
   }
+
+  /**
+   * La tabla `documentos`: leer el Archivo o la Papelera (por `eliminado_en`) y cambiar `eliminado_en`.
+   * No mira permisos: eso lo decide la base de datos de verdad, y lo comprueba comprobar.mjs.
+   */
+  private async contestarDocumentos(ruta: Route, url: URL) {
+    const peticion = ruta.request()
+    const filtro = url.searchParams.get('eliminado_en')
+    if (peticion.method() === 'GET') {
+      const filas = this.documentos.filter(d => filtro === 'is.null' ? d.eliminado_en === null : filtro === 'not.is.null' ? d.eliminado_en !== null : true)
+      return ruta.fulfill({ status: 200, headers: CORS, json: ordenar(filas, url.searchParams.get('order') ?? '') })
+    }
+    if (peticion.method() === 'PATCH') {
+      const id = url.searchParams.get('id')?.replace(/^eq\./, '')
+      const documento = this.documentos.find(d => d.id === id)
+      if (documento) Object.assign(documento, peticion.postDataJSON())
+      // Con count: 'exact', la librería lee cuántas filas han cambiado de Content-Range.
+      return ruta.fulfill({ status: 204, headers: { ...CORS, 'content-range': `*/${documento ? 1 : 0}` }, body: '' })
+    }
+    this.desconocidas.push(`${peticion.method()} ${url.pathname}`)
+    return ruta.fulfill({ status: 404, headers: CORS, json: { message: 'No existe en el Supabase de mentira' } })
+  }
+}
+
+/** Ordena como PostgREST: `order=fecha.desc,id.asc`. */
+function ordenar<T extends object>(filas: T[], orden: string): T[] {
+  const criterios = orden.split(',').filter(c => c !== '').map(c => c.split('.') as [keyof T, string])
+  return [...filas].sort((a, b) => {
+    for (const [campo, sentido] of criterios) {
+      const x = String(a[campo] ?? ''), y = String(b[campo] ?? '')
+      if (x !== y) return (x < y ? -1 : 1) * (sentido === 'desc' ? -1 : 1)
+    }
+    return 0
+  })
 }
 
 /**

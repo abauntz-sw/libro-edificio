@@ -79,11 +79,13 @@ async function subirDocumento(formulario: FormData, archivo: File, libro: Libro,
   // Estas dos comprobaciones las repite la base de datos al crear la ficha.
   // Se hacen antes para no dejar un archivo guardado que luego no se pueda registrar.
   if (!(await libro.existeTipo(ficha.tipo))) throw new ErrorHttp(400, 'Ese tipo de documento no existe en el edificio.')
-  if (await libro.cuentaInstalaciones(ficha.instalaciones) !== ficha.instalaciones.length) {
+  const instalaciones = await libro.nombresInstalaciones(ficha.instalaciones)
+  if (instalaciones.length !== ficha.instalaciones.length) {
     throw new ErrorHttp(400, 'Hay una instalación que no es de este edificio.')
   }
 
-  const ruta = rutaDocumento(ficha.id, ficha.fecha)
+  // El nombre se saca de la ficha de hoy. Si luego se corrige la ficha, el archivo no se renombra.
+  const ruta = rutaDocumento({ ...ficha, instalaciones, extension: 'pdf' })
   const previo = await libro.documento(ficha.id)
   if (previo) {
     // Repetir una subida que ya salió bien no hace nada. Así un reintento con mala cobertura no duplica.
@@ -119,10 +121,10 @@ async function subirFoto(formulario: FormData, archivo: File, libro: Libro, piez
 
   // Se responde lo mismo si el parte no existe que si es de otro: así no se sabe cuál de las dos cosas pasa.
   const edificio = await libro.edificio()
-  const fecha = edificio && await libro.fechaParte(parte)
-  if (!edificio || !fecha || !(await libro.puedoAdjuntarFoto(parte))) {
+  const delParte = edificio && await libro.parte(parte)
+  if (!edificio || !delParte || !(await libro.puedoAdjuntarFoto(parte))) {
     // Solo a quien escribió el parte se le dice que es por el plazo.
-    if (edificio && fecha && await libro.fotoFueraDePlazo(parte)) {
+    if (edificio && delParte && await libro.fotoFueraDePlazo(parte)) {
       throw new ErrorHttp(403, `Ese parte se recibió hace más de ${PLAZO_FOTOS_DIAS} días y ya no admite fotos.`)
     }
     throw new ErrorHttp(403, 'No puedes añadir fotos a ese parte.')
@@ -136,10 +138,10 @@ async function subirFoto(formulario: FormData, archivo: File, libro: Libro, piez
   }
 
   // Si el identificador es de una foto que esta persona no ve, se responde 409 de una de dos formas.
-  // Si la ruta es la misma, GitHub no deja pisar el archivo. Si es otra (un parte de otro año),
+  // Si la ruta es la misma, GitHub no deja pisar el archivo. Si es otra (un parte de otro año o de otra instalación),
   // GitHub guarda el archivo y la base de datos rechaza el identificador repetido: queda un archivo suelto,
   // que no hace daño. Solo pasa si alguien manipula el móvil.
-  const ruta = rutaFoto(id, fecha)
+  const ruta = rutaFoto({ id, ...delParte })
   const escrito = await piezas.almacen().escribir(edificio.repositorio, ruta, bytes, `Añade la foto ${id}`)
 
   try {

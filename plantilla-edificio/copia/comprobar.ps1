@@ -2,10 +2,11 @@
 #
 #   powershell -ExecutionPolicy Bypass -File copia\comprobar.ps1
 #
-# Mira tres cosas:
+# Mira cuatro cosas:
 #   1. Cuándo se actualizó la copia por última vez, según la tarea programada.
 #   2. Si en GitHub hay algo que la copia todavía no tiene.
-#   3. Que cada documento del índice está en la copia y su huella coincide.
+#   3. Que ninguna ruta pase de 250 caracteres. Windows no abre las de más de 260.
+#   4. Que cada documento del índice está en la copia y su huella coincide.
 # Al final dice «Todo bien» o lo que falla. No cambia nada.
 
 param(
@@ -42,7 +43,18 @@ if ($LASTEXITCODE -ne 0) {
   else { Write-Output 'La copia tiene todo lo que hay en GitHub.' }
 }
 
-# 3. Los documentos del índice, uno a uno.
+# 3. Las rutas largas. Los nombres llevan la fecha, el tipo y una descripción (#77): como mucho 116 caracteres.
+#    Con la carpeta de la copia delante, Windows no abre una ruta de más de 260. Se avisa antes, a los 250.
+$limiteRuta = 250
+$largas = @(& git -C $Carpeta -c core.quotepath=off ls-files |
+  ForEach-Object { Join-Path $Carpeta ($_ -replace '/', '\') } |
+  Where-Object { $_.Length -gt $limiteRuta })
+if ($largas.Count -gt 0) {
+  $masLarga = ($largas | Measure-Object -Property Length -Maximum).Maximum
+  $problemas += "Archivos con una ruta de más de $limiteRuta caracteres: $($largas.Count). La más larga tiene $masLarga. Windows puede no abrirlos: haz la copia en una carpeta más corta, como C:\LibroBelagua. Ver copia\README.md."
+}
+
+# 4. Los documentos del índice, uno a uno.
 $indice = Join-Path $Carpeta 'indice\documentos.csv'
 if (-not (Test-Path $indice)) {
   $problemas += 'No está el índice: indice\documentos.csv.'
@@ -51,6 +63,8 @@ if (-not (Test-Path $indice)) {
   $mal = 0
   foreach ($d in $documentos) {
     $ruta = Join-Path $Carpeta ($d.ruta -replace '/', '\')
+    # Una ruta demasiado larga ya se ha avisado arriba. Aquí parecería que falta el archivo, y no es eso.
+    if ($ruta.Length -ge 260) { $mal++; continue }
     if (-not (Test-Path $ruta)) {
       $problemas += "Falta el archivo de «$($d.titulo)»: $($d.ruta)"; $mal++
     } elseif ((Get-FileHash -Algorithm SHA256 -Path $ruta).Hash.ToLower() -ne $d.sha256) {

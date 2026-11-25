@@ -16,11 +16,21 @@ Lo escribe la aplicación. No hace falta la aplicación para leerlo: basta este 
 | `indice/` | La lista de todo lo guardado. Se actualiza cada día |
 | `copia/` | Lo que mantiene al día la copia del ordenador de la oficina. Ver [`copia/README.md`](copia/README.md) |
 
-## Por qué los archivos tienen nombres raros
+## Cómo se llaman los archivos
 
-Un archivo se llama, por ejemplo, `documentos/2021/e4996b97-8d6e-5a5a-892c-2239c6bd3c94.pdf`.
+Un documento se llama, por ejemplo:
 
-Los nombres no llevan títulos ni nombres de personas, para no mostrar datos personales. Lo que es cada archivo está apuntado en el índice.
+```text
+documentos/2021/2021-06-30_certificado_revision-de-la-caldera_e4996b97-8d6e-5a5a-892c-2239c6bd3c94.pdf
+```
+
+Por orden: la fecha del documento, su tipo, una descripción corta sacada del título y un identificador. Si el título no dice nada, como «escaneo001», la descripción es la instalación. Algunos no llevan descripción.
+
+Una foto lleva la fecha del parte y la instalación: `fotos/2026/2026-11-21_extintores_<identificador>.jpg`.
+
+- El identificador, al final, hace que dos archivos nunca se llamen igual.
+- **El nombre no cambia** aunque luego se corrija la ficha: es el del día en que se archivó. El título y la fecha que valen son los del índice.
+- Los archivos más antiguos pueden llamarse solo con el identificador, como `documentos/2021/e4996b97-8d6e-5a5a-892c-2239c6bd3c94.pdf`. Se dejan así.
 
 ## Cómo encontrar un documento
 

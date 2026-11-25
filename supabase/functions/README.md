@@ -41,7 +41,7 @@ Pasos, en este orden:
 
 1. Comprueba el archivo y la ficha.
 2. Pregunta a la base de datos si esa persona puede archivar, con `puedo_archivar`.
-3. Escribe el archivo en `documentos/AAAA/<id>.pdf`.
+3. Escribe el archivo en `documentos/AAAA/<fecha>_<tipo>_<descripción>_<id>.pdf`. Ver «Cómo se llaman los archivos», más abajo.
 4. Crea la ficha con `registrar_documento`, con la sesión de esa persona.
 
 Si el paso 4 falla, queda un archivo sin ficha. No hace daño, y repetir la subida lo arregla. Nunca queda una ficha sin archivo.
@@ -52,7 +52,7 @@ Repetir una subida con el mismo `id` y el mismo archivo no duplica nada. Así un
 
 La función busca la ficha con la sesión de la persona. La base de datos solo se la da si puede verla. Si no, responde «No se encuentra ese documento», igual que si no existiera.
 
-Solo entrega archivos de `documentos/`, con la forma `documentos/AAAA/<id>.<extensión>`. Si una ficha apunta a otro archivo del repositorio, como el índice o una foto, responde lo mismo: «No se encuentra ese documento».
+Solo entrega archivos de `documentos/`, con la forma `documentos/AAAA/<fecha>_<tipo>_<descripción>_<id>.<extensión>` o la de antes, `documentos/AAAA/<id>.<extensión>`. Si una ficha apunta a otro archivo del repositorio, como el índice o una foto, responde lo mismo: «No se encuentra ese documento».
 
 ### Subir una foto de un parte
 
@@ -68,14 +68,33 @@ Pasos, en este orden:
 
 1. Comprueba que es un JPEG y que no pasa de 5 MB.
 2. Pregunta a la base de datos si esa persona puede añadir fotos a ese parte, con `puedo_adjuntar_foto`. Solo puede quien escribió el parte, y hasta 7 días después de que llegara (`recibido_en`). Pasado ese plazo, a quien escribió el parte se le dice: «Ese parte se recibió hace más de 7 días y ya no admite fotos». A los demás, lo de siempre: «No puedes añadir fotos a ese parte».
-3. Escribe la foto en `fotos/AAAA/<id>.jpg`. El año es el de la fecha del parte.
+3. Escribe la foto en `fotos/AAAA/<fecha>_<instalación>_<id>.jpg`. La fecha y el año son los del parte, y la instalación, la suya.
 4. La apunta en `parte_fotos`, con la sesión de esa persona.
 
 Igual que con los documentos: repetir la subida con el mismo `id` y la misma foto no duplica nada, y si el paso 4 falla, repetirla lo arregla.
 
 ### Descargar una foto
 
-`GET /archivos?foto=<id>`. La entrega a quien ve su parte: la administración, la consulta y la guarda, todas; una empresa, las de sus instalaciones. Si no, responde «No se encuentra esa foto». Solo entrega archivos con la forma `fotos/AAAA/<id>.jpg`.
+`GET /archivos?foto=<id>`. La entrega a quien ve su parte: la administración, la consulta y la guarda, todas; una empresa, las de sus instalaciones. Si no, responde «No se encuentra esa foto». Solo entrega archivos con la forma `fotos/AAAA/<fecha>_<instalación>_<id>.jpg` o la de antes, `fotos/AAAA/<id>.jpg`.
+
+### Cómo se llaman los archivos
+
+Los nombres los monta [`_compartido/nombres.ts`](_compartido/nombres.ts). Lo usan esta función y las herramientas de carga local, así que las dos ponen el mismo nombre al mismo documento. Sus casos de prueba están en `_compartido/casos-nombres.ts`, y los pasan los tests de las dos.
+
+```text
+documentos/2026/2026-11-21_certificado_revision-de-la-caldera_<id>.pdf
+fotos/2026/2026-11-21_extintores_<id>.jpg
+```
+
+- **Fecha:** la del documento, o la del parte.
+- **Tipo:** el `tipo_id`, como `certificado`.
+- **Descripción:** el título, en minúsculas, sin acentos, solo con letras, cifras y guiones, y como mucho 40 caracteres, cortado en un guion. Si empieza por el tipo, se quita: «Certificado de revisión de la caldera» queda `revision-de-la-caldera`.
+- Si el título no dice nada (`escaneo001`, `scan`, `documento-3`, `sin título`…), se usa el nombre de la instalación; si hay varias, la primera por orden alfabético. Si tampoco hay instalación, el nombre va sin descripción: `2026-11-21_licencia_<id>.pdf`.
+- **Identificador:** completo y al final. Así el nombre nunca se repite.
+
+El nombre se decide el día en que se archiva. Si después se corrige la ficha, el archivo no se renombra. Los archivos de antes, que se llaman solo `<id>.pdf`, se quedan como están.
+
+Con 40 caracteres de descripción, el nombre más largo ocupa 116. La copia de la oficina, en Windows, no admite rutas de más de 260: ver el README de `plantilla-edificio/copia/`.
 
 ### Respuestas
 

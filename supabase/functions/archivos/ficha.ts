@@ -37,17 +37,24 @@ export function esFecha(texto: string): boolean {
   return fecha.getUTCFullYear() === ano && fecha.getUTCMonth() === mes - 1 && fecha.getUTCDate() === dia
 }
 
-/** Ruta de un documento dentro del repositorio del edificio. La misma que usa la herramienta de carga local. */
-export const rutaDocumento = (id: string, fecha: string) => `documentos/${fecha.slice(0, 4)}/${id}.pdf`
+// Cómo se llaman los archivos: lo mismo que usa la herramienta de carga local.
+export { rutaDocumento, rutaFoto } from '../_compartido/nombres.ts'
+
+/** Lo que va delante del identificador en un nombre: `<fecha>_<tipo>_<descripción>_` o `<fecha>_<instalación>_`. */
+const FECHA = '[0-9]{4}-[0-9]{2}-[0-9]{2}'
+const PARTE = '[a-z0-9-]+'
 
 /**
- * Dice si una ruta es la de ese documento: documentos/AAAA/<id>.<extensión>.
+ * Dice si una ruta es la de ese documento. Valen dos formas, y la base de datos tiene la misma regla:
+ *   documentos/AAAA/<fecha>_<tipo>_<descripción>_<id>.<extensión>   la de ahora (#77); la descripción puede faltar
+ *   documentos/AAAA/<id>.<extensión>                                 la de antes, que no se renombra
  * La extensión puede ser otra que pdf, porque la herramienta de carga local también guarda otros formatos.
  * Así una ficha no puede apuntar a otro archivo del repositorio, como el índice o una foto.
  */
 export function esRutaDeDocumento(ruta: string, id: string): boolean {
   // id ya viene comprobado como UUID: solo lleva cifras, letras de la a a la f y guiones.
-  return esUuid(id) && new RegExp(`^documentos/[0-9]{4}/${id}\\.[a-z0-9]+$`).test(ruta)
+  return esUuid(id) &&
+    new RegExp(`^documentos/[0-9]{4}/(${FECHA}_${PARTE}_(${PARTE}_)?)?${id}\\.[a-z0-9]+$`).test(ruta)
 }
 
 /** Un PDF empieza siempre por «%PDF-». Así no se cuela otro archivo con el nombre cambiado. */
@@ -64,12 +71,12 @@ export function esJpeg(bytes: Uint8Array): boolean {
   return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
 }
 
-/** Ruta de una foto dentro del repositorio del edificio. El año es el del parte. */
-export const rutaFoto = (id: string, fechaParte: string) => `fotos/${fechaParte.slice(0, 4)}/${id}.jpg`
-
-/** Dice si una ruta es la de esa foto: fotos/AAAA/<id>.jpg. La base de datos tiene la misma regla. */
+/**
+ * Dice si una ruta es la de esa foto. Valen fotos/AAAA/<fecha>_<instalación>_<id>.jpg, sin instalación
+ * si la foto no tiene parte (#82), y la forma de antes, fotos/AAAA/<id>.jpg. La base de datos tiene la misma regla.
+ */
 export function esRutaDeFoto(ruta: string, id: string): boolean {
-  return esUuid(id) && new RegExp(`^fotos/[0-9]{4}/${id}\\.jpg$`).test(ruta)
+  return esUuid(id) && new RegExp(`^fotos/[0-9]{4}/(${FECHA}_(${PARTE}_)?)?${id}\\.jpg$`).test(ruta)
 }
 
 /** Los datos de una foto: su identificador, creado por el móvil, y el del parte al que va. */

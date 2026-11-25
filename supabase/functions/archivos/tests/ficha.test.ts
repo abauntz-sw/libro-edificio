@@ -1,5 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert'
-import { ErrorHttp, esFecha, esJpeg, esPdf, esRutaDeDocumento, esRutaDeFoto, leerFicha, leerFoto, rutaDocumento, rutaFoto, sha256 } from '../ficha.ts'
+import { ErrorHttp, esFecha, esJpeg, esPdf, esRutaDeDocumento, esRutaDeFoto, leerFicha, leerFoto, sha256 } from '../ficha.ts'
 
 const ID = '99999999-9999-4999-8999-999999999991'
 const INSTALACION = '11111111-2222-4333-8444-555555555555'
@@ -57,14 +57,23 @@ Deno.test('esFecha solo acepta fechas que existen', () => {
   assertEquals(['2026-02-29', '10/03/2026', '2026-3-10', ''].map(esFecha), [false, false, false, false])
 })
 
-Deno.test('la ruta es la misma que usa la herramienta de carga local', () => {
-  assertEquals(rutaDocumento(ID, '2021-06-30'), `documentos/2021/${ID}.pdf`)
-})
-
 Deno.test('esRutaDeDocumento solo acepta la ruta de ese mismo documento', () => {
+  // La de ahora, con y sin descripción (#77), y la de antes, que no se renombra.
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_certificado_revision-de-la-caldera_${ID}.pdf`, ID), true)
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_licencia_${ID}.pdf`, ID), true)
   assertEquals(esRutaDeDocumento(`documentos/2021/${ID}.pdf`, ID), true)
   // La herramienta de carga local también guarda otros formatos.
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_plano_planta-baja_${ID}.docx`, ID), true)
   assertEquals(esRutaDeDocumento(`documentos/2021/${ID}.docx`, ID), true)
+
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_certificado_${INSTALACION}.pdf`, ID), false, 'la de otro documento')
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_certificado_${ID}_${INSTALACION}.pdf`, ID), false, 'otro identificador al final')
+  assertEquals(esRutaDeDocumento(`documentos/2021/certificado_${ID}.pdf`, ID), false, 'sin fecha')
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_Certificado_${ID}.pdf`, ID), false, 'con mayúsculas')
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_certificado_a b_${ID}.pdf`, ID), false, 'con espacios')
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_certificado_a.b_${ID}.pdf`, ID), false, 'con un punto')
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_x_y_z_${ID}.pdf`, ID), false, 'demasiadas partes')
+  assertEquals(esRutaDeDocumento(`documentos/2021/2021-06-30_certificado_../../indice_${ID}.pdf`, ID), false)
 
   assertEquals(esRutaDeDocumento('indice/documentos.csv', ID), false)
   assertEquals(esRutaDeDocumento('README.md', ID), false)
@@ -92,9 +101,14 @@ Deno.test('esJpeg mira cómo empieza el archivo', () => {
   assertEquals(esJpeg(new Uint8Array([0xff, 0xd8])), false)
 })
 
-Deno.test('una foto va en fotos/<año del parte>/<id>.jpg, y solo esa ruta es la suya', () => {
-  assertEquals(rutaFoto(ID, '2025-12-30'), `fotos/2025/${ID}.jpg`)
+Deno.test('esRutaDeFoto solo acepta la ruta de esa misma foto', () => {
+  // La de ahora, con y sin instalación (#82), y la de antes, que no se renombra.
+  assertEquals(esRutaDeFoto(`fotos/2025/2025-12-30_extintores_${ID}.jpg`, ID), true)
+  assertEquals(esRutaDeFoto(`fotos/2025/2025-12-30_${ID}.jpg`, ID), true)
   assertEquals(esRutaDeFoto(`fotos/2025/${ID}.jpg`, ID), true)
+  assertEquals(esRutaDeFoto(`fotos/2025/2025-12-30_extintores_${INSTALACION}.jpg`, ID), false, 'la de otra foto')
+  assertEquals(esRutaDeFoto(`fotos/2025/2025-12-30_a_b_${ID}.jpg`, ID), false, 'demasiadas partes')
+  assertEquals(esRutaDeFoto(`fotos/2025/extintores_${ID}.jpg`, ID), false, 'sin fecha')
   assertEquals(esRutaDeFoto(`documentos/2025/${ID}.pdf`, ID), false)
   assertEquals(esRutaDeFoto(`fotos/2025/${ID}.png`, ID), false)
   assertEquals(esRutaDeFoto(`fotos/2025/../../indice/${ID}.jpg`, ID), false)

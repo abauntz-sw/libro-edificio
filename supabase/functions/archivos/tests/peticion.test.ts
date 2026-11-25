@@ -18,6 +18,8 @@ const FOTO = 'bbbbbbbb-0000-4000-8000-000000000001'
 
 type Perfil = 'admin' | 'guarda' | 'calor' | 'extintores'
 
+const NOMBRES: Record<string, string> = { [CALDERA]: 'Caldera de gasóleo', [EXTINTORES]: 'Extintores' }
+
 /**
  * Un edificio de mentira con las mismas reglas que la base de datos:
  * administración archiva y ve todo, el guarda solo ve, y una empresa solo archiva y ve lo de su instalación.
@@ -49,7 +51,7 @@ function edificioDeMentira() {
         (instalacionDe[perfil] !== undefined && instalaciones.length > 0 && instalaciones.every(una => una === instalacionDe[perfil])),
     ),
     existeTipo: tipo => Promise.resolve(tipo === 'certificado'),
-    cuentaInstalaciones: ids => Promise.resolve(ids.filter(id => id === CALDERA || id === EXTINTORES).length),
+    nombresInstalaciones: ids => Promise.resolve(ids.flatMap(id => NOMBRES[id] ?? [])),
     documento: id => {
       const documento = documentos.get(id)
       const loVe = documento && (perfil === 'admin' || perfil === 'guarda' || documento.instalaciones.includes(instalacionDe[perfil]!))
@@ -60,7 +62,10 @@ function edificioDeMentira() {
       if (!documentos.has(registro.id)) documentos.set(registro.id, { ...registro })
       return Promise.resolve()
     },
-    fechaParte: id => Promise.resolve(veParte(perfil, id) ? partes.get(id)!.fecha : null),
+    parte: id => {
+      const parte = partes.get(id)
+      return Promise.resolve(parte && veParte(perfil, id) ? { fecha: parte.fecha, instalacion: NOMBRES[parte.instalacion] } : null)
+    },
     puedoAdjuntarFoto: id => Promise.resolve(partes.get(id)?.autor === perfil && !partes.get(id)?.fueraDePlazo),
     fotoFueraDePlazo: id => Promise.resolve(partes.get(id)?.autor === perfil && partes.get(id)?.fueraDePlazo === true),
     foto: id => {
@@ -136,7 +141,8 @@ async function enSilencio<T>(tarea: () => Promise<T>): Promise<T> {
   try { return await tarea() } finally { console.error = original }
 }
 
-const RUTA = `documentos/2026/${ID}.pdf`
+// El nombre lleva la fecha, el tipo y el título de la ficha (#77). El título es «Revisión de prueba».
+const RUTA = `documentos/2026/2026-03-10_certificado_revision-de-prueba_${ID}.pdf`
 
 Deno.test('administración sube un PDF: se guarda el archivo y se crea la ficha', async () => {
   const edificio = edificioDeMentira()
@@ -153,6 +159,13 @@ Deno.test('administración sube un PDF: se guarda el archivo y se crea la ficha'
     [ficha.ruta, ficha.titulo, ficha.caduca, ficha.nombreOriginal, ficha.tamanoBytes, ficha.commit, ficha.instalaciones],
     [RUTA, 'Revisión de prueba', '2027-03-10', 'revisión caldera.pdf', PDF.length, 'commit-1', [CALDERA]],
   )
+})
+
+Deno.test('si el título no dice nada, el nombre lleva la instalación, por su nombre y no por su identificador', async () => {
+  const edificio = edificioDeMentira()
+  const respuesta = await edificio.subir('admin', { titulo: 'escaneo001' })
+  assertEquals(respuesta.status, 201)
+  assertEquals((await respuesta.json()).ruta, `documentos/2026/2026-03-10_certificado_caldera-de-gasoleo_${ID}.pdf`)
 })
 
 Deno.test('administración descarga lo que subió, con su nombre original', async () => {
@@ -329,7 +342,8 @@ Deno.test('descargar pide un identificador con forma de UUID', async () => {
 
 // Fotos de los partes
 
-const RUTA_FOTO = `fotos/2026/${FOTO}.jpg`
+// El nombre lleva la fecha del parte y su instalación (#77).
+const RUTA_FOTO = `fotos/2026/2026-11-18_extintores_${FOTO}.jpg`
 
 /** Cuenta las veces que se pide un archivo a GitHub. */
 function contarLecturas(edificio: ReturnType<typeof edificioDeMentira>) {
@@ -349,11 +363,11 @@ Deno.test('el guarda añade una foto a su parte: se guarda en fotos/ y se apunta
   assertEquals(edificio.fotos.get(FOTO), { ruta: RUTA_FOTO, sha256: cuerpo.sha256, parte: PARTE_GUARDA })
 })
 
-Deno.test('la carpeta de la foto es la del año del parte', async () => {
+Deno.test('la carpeta y la fecha de la foto son las del parte, y el nombre lleva su instalación', async () => {
   const edificio = edificioDeMentira()
   const respuesta = await edificio.subirFoto('calor', { parte: PARTE_CALOR })
   assertEquals(respuesta.status, 201)
-  assertEquals((await respuesta.json()).ruta, `fotos/2025/${FOTO}.jpg`)
+  assertEquals((await respuesta.json()).ruta, `fotos/2025/2025-12-30_caldera-de-gasoleo_${FOTO}.jpg`)
 })
 
 Deno.test('nadie más añade fotos a un parte, y no se escribe nada', async () => {

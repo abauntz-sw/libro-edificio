@@ -1,0 +1,4 @@
+{
+  "//": "Para Node y TypeScript: estos archivos son módulos ES, como los de herramientas/. Deno no lo necesita.",
+  "type": "module"
+}

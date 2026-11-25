@@ -217,7 +217,7 @@ Copia `.env.ejemplo` como `.env` y rellénalo: la dirección del proyecto de Sup
 
 1. **Comprueba toda la hoja.** Tipo, título, fechas, instalaciones, y que cada archivo sigue en su sitio y no ha cambiado. Muestra todos los errores juntos, con su número de fila. Con un solo error no escribe nada.
 2. **Abre una copia temporal del repositorio.** Es parcial: de los documentos que ya hay en el repositorio no baja ninguno.
-3. **Copia los archivos** a esa copia, en `documentos/AAAA/<id>.ext`. El año es el de la fecha del documento. Los originales solo se leen.
+3. **Copia los archivos** a esa copia, en `documentos/AAAA/<fecha>_<tipo>_<descripción>_<id>.ext`. El año es el de la fecha del documento. El nombre es el mismo que pone la función de archivos al subir desde la web: ver «Cómo se llaman los archivos» en el [README de las funciones](../supabase/functions/README.md). Los originales solo se leen.
 4. **Hace un único commit y lo sube.** Cada ficha guarda ese commit en `commit_sha`. La copia temporal no trae la historia y no sabe qué commit guardó cada archivo, así que se apunta el último, que los contiene todos.
 5. **Borra la copia temporal**, también si algo ha fallado.
 6. **Crea las fichas** en Supabase con `registrar_documento` y muestra un resumen: cargados, saltados y con error.

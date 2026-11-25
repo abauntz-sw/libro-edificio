@@ -73,7 +73,8 @@ test('sube los archivos a documentos/AAAA en un único commit, sin tocar los ori
 
   expect(carga).toMatchObject({ copiados: 2, conCommit: true, commit: git(servidor, 'rev-parse', 'main') })
   for (const doc of documentos) {
-    expect(doc.ruta).toMatch(/^documentos\/2025\/[0-9a-f-]{36}\.pdf$/)
+    // El nombre legible (#77): fecha, tipo, descripción e identificador.
+    expect(doc.ruta).toMatch(/^documentos\/2025\/2025-06-01_informe_[a-z0-9-]+_[0-9a-f-]{36}\.pdf$/)
     expect(contenidoEnServidor(doc.ruta)).toBe(contenidoDe(join(origen, doc.rutaOriginal)))
   }
   expect(commitsEnServidor()).toBe(1)

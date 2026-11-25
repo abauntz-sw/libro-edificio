@@ -1,6 +1,7 @@
 // Comprueba el listado antes de escribir nada. No toca el disco ni la base de datos:
 // recibe las filas y lo que ya hay en el edificio, y dice qué se cargaría y qué está mal.
 
+import { rutaDocumento } from '../../supabase/functions/_compartido/nombres.ts'
 import type { Fila } from './csv.ts'
 import { AVISO_PREPARADO } from './listado.ts'
 import { idDocumento } from './uuid.ts'
@@ -57,10 +58,6 @@ export function leerFecha(texto: string): string | null {
   const existe = fecha.getUTCFullYear() === Number(ano) && fecha.getUTCMonth() === Number(mes) - 1 && fecha.getUTCDate() === Number(dia)
   return existe ? `${ano}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}` : null
 }
-
-/** Ruta de un documento dentro del repositorio del edificio: documentos/AAAA/<id>.ext */
-export const rutaDocumento = (id: string, fecha: string, extension: string) =>
-  `documentos/${fecha.slice(0, 4)}/${id}.${extension}`
 
 /**
  * Convierte la columna `instalaciones` en identificadores.
@@ -149,7 +146,11 @@ export function comprobarListado(filas: Fila[], catalogo: Catalogo): Comprobacio
       emisor: (datos.emisor ?? '').trim(),
       instalaciones: instalaciones.ids,
       nombreOriginal: (datos.nombre ?? '').trim() || rutaOriginal.split('/').pop()!,
-      ruta: rutaDocumento(id, fecha, extension),
+      // El mismo nombre que pone la función de archivos al subir desde la web (#77).
+      ruta: rutaDocumento({
+        id, fecha, tipo, titulo, extension,
+        instalaciones: instalaciones.ids.map(una => catalogo.instalaciones.find(i => i.id === una)!.nombre),
+      }),
     })
   })
   return resultado
